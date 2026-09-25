@@ -1,8 +1,13 @@
 services:
-  mod-builder:
+  ra2-web:
     build:
       context: .
       dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:8080:3000"
     volumes:
-      - ./mod:/workspace/mod:ro
-      - ./dist:/workspace/dist
+      - ./original-game:/app/public/original-game:ro
+      - ./patches:/workspace/patches:ro
+    environment:
+      RA2_ORIGINAL_WEB_PATH: /original-game
+    restart: unless-stopped
