@@ -1151,4 +1151,66 @@ const fs = require('fs');
   fs.writeFileSync(file, src);
 }
 
+
+// Make Traits.filter() support both trait descriptors/classes and predicate callbacks.
+// Several files in this fork use Traits.filter like Array.filter, which previously caused
+// "Function has non-object prototype 'undefined' in instanceof check".
+{
+  const file = 'src/game/Traits.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  const oldBlock = `  filter(type: any): any[] {
+    let cached = this.traitsByTypeCache.get(type);
+    if (cached) {
+      return cached;
+    }
+
+    cached = typeof type === 'function' 
+      ? this.allTraits.filter(trait => trait instanceof type)
+      : this.allTraits.filter(trait => this.traitImplements(trait, type));
+
+    this.traitsByTypeCache.set(type, cached);
+    return cached;
+  }`;
+
+  const newBlock = `  filter(type: any): any[] {
+    let cached = this.traitsByTypeCache.get(type);
+    if (cached) {
+      return cached;
+    }
+
+    if (typeof type === 'function') {
+      const proto = (type as any).prototype;
+
+      // Constructor/class: preserve the original instanceof behavior.
+      if (proto && typeof proto === 'object') {
+        cached = this.allTraits.filter(trait => trait instanceof type);
+      } else {
+        // Arrow/function predicate: some forked gameplay files use Traits.filter
+        // exactly like Array.filter().
+        cached = this.allTraits.filter((trait, index) => {
+          try {
+            return !!type(trait, index, this.allTraits);
+          } catch {
+            return false;
+          }
+        });
+      }
+    } else {
+      cached = this.allTraits.filter(trait => this.traitImplements(trait, type));
+    }
+
+    this.traitsByTypeCache.set(type, cached);
+    return cached;
+  }`;
+
+  if (!src.includes(oldBlock)) {
+    console.error('Expected Traits.filter implementation not found.');
+    process.exit(1);
+  }
+
+  src = src.replace(oldBlock, newBlock);
+  fs.writeFileSync(file, src);
+}
+
 NODE
