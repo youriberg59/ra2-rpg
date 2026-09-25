@@ -304,4 +304,42 @@ const fs = require('fs');
   fs.writeFileSync(file, src);
 }
 
+
+// Prevent visibility/audio compatibility mismatches from crashing the game loop.
+{
+  const file = 'src/engine/GameAnimationLoop.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  src = src.replace(
+    `      this.sound.audioSystem.setMuted(this.paused);`,
+    `      const audioSystem = this.sound?.audioSystem as any;
+      if (audioSystem && typeof audioSystem.setMuted === 'function') {
+        audioSystem.setMuted(this.paused);
+      } else {
+        console.warn('[GameAnimationLoop] audioSystem.setMuted unavailable; skipping visibility mute.');
+      }`
+  );
+
+  fs.writeFileSync(file, src);
+}
+
+// Suppress replay-save error toast entirely for now; replay persistence in this
+// upstream fork is incomplete and unrelated to RPG gameplay.
+{
+  const file = 'src/gui/screen/game/GameScreen.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  src = src.replace(
+    `      } catch (error) {
+        console.error(error);
+        this.toastApi.push(this.strings.get('GUI:SaveReplayError'));
+      }`,
+    `      } catch (error) {
+        console.warn('[Replay] Save failed; ignoring in self-hosted RPG mode.', error);
+      }`
+  );
+
+  fs.writeFileSync(file, src);
+}
+
 NODE
