@@ -142,4 +142,53 @@ const fs = require('fs');
   fs.writeFileSync(file, src);
 }
 
+
+// Force English UI strings even when the bundled general.csf is Chinese.
+// The upstream en-US JSON is incomplete, so add a small fallback dictionary
+// for the main menu keys that are otherwise inherited from the Chinese CSF.
+{
+  const file = 'src/Application.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  const marker = "    // Final check and log sample strings";
+  const inject = `    const selfHostedEnglishOverrides: Record<string, string> = {
+      'GUI:MainMenu': 'Main Menu',
+      'GUI:Options': 'Options',
+      'GUI:Skirmish': 'Skirmish',
+      'GUI:Fullscreen': 'Fullscreen',
+      'TS:InfoAndCredits': 'Info & Credits',
+      'GUI:Mods': 'Mods',
+      'GUI:OK': 'OK',
+      'GUI:OKAY': 'OK',
+      'TS:TestEntry': 'Developer Tools',
+      'STT:TestEntry': 'Open developer and storage tools',
+    };
+    this.strings.fromJson(selfHostedEnglishOverrides);
+
+`;
+
+  if (src.includes(marker) && !src.includes("selfHostedEnglishOverrides")) {
+    src = src.replace(marker, inject + marker);
+  }
+
+  fs.writeFileSync(file, src);
+}
+
+// Replace Chinese strings hard-coded in the upstream home screen.
+{
+  const file = 'src/gui/screen/mainMenu/main/HomeScreen.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  src = src
+    .replace("label: '遭遇战'", "label: this.strings.get('GUI:Skirmish') || 'Skirmish'")
+    .replace("tooltip: '与AI进行单人遭遇战'", "tooltip: 'Single-player skirmish against AI'")
+    .replace("console.log('[HomeScreen] 遭遇战 clicked');", "console.log('[HomeScreen] Skirmish clicked');")
+    .replace("label: '底层测试入口'", "label: this.strings.get('TS:TestEntry') || 'Developer Tools'")
+    .replace("tooltip: '进入底层文件系统与测试工具'", "tooltip: this.strings.get('STT:TestEntry') || 'Open developer and storage tools'")
+    .replace("'无法退出全屏模式'", "'Unable to exit fullscreen mode'")
+    .replace("'无法进入全屏模式\\n\\n请检查浏览器权限设置'", "'Unable to enter fullscreen mode\\n\\nPlease check your browser permissions'");
+
+  fs.writeFileSync(file, src);
+}
+
 NODE
