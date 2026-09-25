@@ -687,4 +687,126 @@ const fs = require('fs');
   fs.writeFileSync(worldViewFile, wv);
 }
 
+
+// RPG startup: ensure the local player gets a real infantry hero instead of the MCV.
+{
+  const file = 'src/game/Game.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  const anchor = `      const mcvRules = this.rules.getObject(mcvName, ObjectType.Vehicle);
+      const mcv = this.createUnitForPlayer(mcvRules, player);
+      this.spawnObject(mcv, startTile);
+`;
+
+  const replacement = `      const mcvRules = this.rules.getObject(mcvName, ObjectType.Vehicle);
+      const mcv = this.createUnitForPlayer(mcvRules, player);
+      this.spawnObject(mcv, startTile);
+
+      // RPG mode always gives the local player one infantry hero, independent
+      // of the Skirmish starting-unit count.
+      const rpgMode = typeof window !== 'undefined' &&
+        new URLSearchParams(window.location.search).get('rpg') === '1';
+
+      if (rpgMode && player === this.localPlayer) {
+        const infantryRules = [...this.rules.infantryRules.values()].filter((unit: any) =>
+          unit.techLevel !== -1 &&
+          !unit.naval &&
+          unit.isAvailableTo(player.country) &&
+          unit.hasOwner(player.country) &&
+          this.art.hasObject(unit.name, ObjectType.Infantry)
+        );
+
+        const preferredNames = ['E1', 'E2', 'GI', 'CONSCRIPT'];
+        const heroRules =
+          preferredNames
+            .map((name) => infantryRules.find((u: any) => u.name.toUpperCase() === name))
+            .find(Boolean) ??
+          infantryRules.find((u: any) => !!u.primary) ??
+          infantryRules[0];
+
+        if (heroRules) {
+          const finder = new CardinalTileFinder(
+            this.map.tiles,
+            this.map.mapBounds,
+            startTile,
+            4,
+            1,
+            (tile: any) =>
+              !this.map
+                .getGroundObjectsOnTile(tile)
+                .find((obj: any) => !(obj.isSmudge() || (obj.isOverlay() && obj.isTiberium()))) &&
+              this.map.terrain.getPassableSpeed(tile, SpeedType.Foot, false, false) > 0
+          );
+
+          const heroTile = finder.getNextTile() ?? startTile;
+          const hero = this.createUnitForPlayer(heroRules, player);
+          hero.position.subCell = Infantry.SUB_CELLS[0];
+          (hero as any).__rpgHero = true;
+          this.spawnObject(hero, heroTile);
+          this.unitSelection.deselectAll();
+          this.unitSelection.addToSelection(hero);
+
+          console.log('[RPG] Spawned local hero:', hero.name, hero.id, heroTile.rx, heroTile.ry);
+        } else {
+          console.warn('[RPG] No infantry rules available for local player faction.');
+        }
+      }
+`;
+
+  if (!src.includes(anchor)) {
+    console.error('Expected MCV spawn block not found.');
+    process.exit(1);
+  }
+
+  src = src.replace(anchor, replacement);
+  fs.writeFileSync(file, src);
+}
+
+// Prefer the explicit RPG hero and never fall back to the MCV unless no infantry exists.
+{
+  const file = 'src/gui/screen/game/worldInteraction/RpgInteraction.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  src = src.replace(
+    `    return (
+      objects.find((obj: any) => obj.isInfantry?.() && obj.unitOrderTrait && !obj.isDestroyed) ??
+      objects.find((obj: any) => obj.isUnit?.() && obj.unitOrderTrait && !obj.isDestroyed)
+    );`,
+    `    return (
+      objects.find((obj: any) => obj.__rpgHero && obj.unitOrderTrait && !obj.isDestroyed) ??
+      objects.find((obj: any) => obj.isInfantry?.() && obj.unitOrderTrait && !obj.isDestroyed)
+    );`
+  );
+
+  fs.writeFileSync(file, src);
+}
+
+// Hero marker + camera should use the explicit RPG hero.
+{
+  const file = 'src/gui/screen/game/WorldView.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  src = src.replace(
+    `      const hero = (localPlayer?.getOwnedObjects?.() ?? []).find((obj: any) =>
+        !obj?.isDestroyed && obj?.unitOrderTrait && (obj?.isInfantry?.() || obj?.isUnit?.())
+      );`,
+    `      const owned = localPlayer?.getOwnedObjects?.() ?? [];
+      const hero =
+        owned.find((obj: any) => obj?.__rpgHero && !obj?.isDestroyed) ??
+        owned.find((obj: any) => obj?.isInfantry?.() && !obj?.isDestroyed && obj?.unitOrderTrait);`
+  );
+
+  const marker = `        console.log('[WorldView] RPG hero marker attached.', hero.name, hero.id);`;
+  const centered = `        const heroPan = new MapPanningHelper(this.game.map).computeCameraPanFromWorld(hero.position.worldPosition);
+        worldScene.cameraPan.setPan(heroPan);
+        worldScene.updateCamera(worldScene.cameraPan.getPan(), worldScene.cameraZoom.getZoom());
+        console.log('[WorldView] RPG hero marker attached and camera centered.', hero.name, hero.id, heroPan);`;
+
+  if (src.includes(marker)) {
+    src = src.replace(marker, centered);
+  }
+
+  fs.writeFileSync(file, src);
+}
+
 NODE
