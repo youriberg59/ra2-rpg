@@ -990,4 +990,69 @@ const fs = require('fs');
   fs.writeFileSync(file, src);
 }
 
+
+// Restore the actual game simulation loop.
+// Upstream GameTurnManager.doGameTurn() is a placeholder that only returns true,
+// so Game.currentTick never advances and queued orders are never processed.
+{
+  const file = 'src/game/GameTurnManager.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  src = src.replace(
+`export class GameTurnManager {
+  private gameTurnMillis: number = 33; // ~30 FPS default
+  private errorState = false;`,
+`export class GameTurnManager {
+  private gameTurnMillis: number = 33; // ~30 FPS default
+  private errorState = false;
+  private game?: any;
+
+  constructor(game?: any) {
+    this.game = game;
+  }`
+  );
+
+  src = src.replace(
+`  doGameTurn(_timestamp: number): boolean {
+    // In SP placeholder we just signal a successful tick
+    return true;
+  }`,
+`  doGameTurn(_timestamp: number): boolean {
+    if (this.errorState) {
+      return false;
+    }
+
+    if (this.game) {
+      this.game.update();
+    }
+
+    return true;
+  }`
+  );
+
+  src = src.replace(
+`  dispose(): void {
+    // No-op
+  }`,
+`  dispose(): void {
+    this.game = undefined;
+  }`
+  );
+
+  fs.writeFileSync(file, src);
+}
+
+// Pass the loaded Game instance into GameTurnManager.
+{
+  const file = 'src/gui/screen/game/GameScreen.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  src = src.replace(
+    "    this.gameTurnMgr = new GameTurnManager();",
+    "    this.gameTurnMgr = new GameTurnManager(game);"
+  );
+
+  fs.writeFileSync(file, src);
+}
+
 NODE
