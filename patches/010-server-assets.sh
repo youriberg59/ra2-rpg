@@ -116,4 +116,30 @@ const fs = require('fs');
   src = src.replace(marker, directImport + marker);
   fs.writeFileSync(file, src);
 }
+
+// Skip expensive Bink -> WebM conversion from language.mix.
+// It is only used for the menu video and can stall for a long time in-browser.
+{
+  const file = 'src/engine/gameRes/GameResImporter.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  const oldBlock = `} else if (mixFileNameLower.match(/language\\.mix$/)) {
+            onProgress(S.get("ts:import_importing_long", mixFileNameLower));
+            await this.importVideo(mixVirtualFile, targetRfsRootDir);
+        } else if (mixFileNameLower.match(/ra2\\.mix$/)) {`;
+
+  const newBlock = `} else if (mixFileNameLower.match(/language\\.mix$/)) {
+            onProgress('Importing ' + mixFileNameLower + '...');
+            console.log('[GameResImporter] Skipping Bink menu-video conversion for language.mix in self-hosted mode.');
+        } else if (mixFileNameLower.match(/ra2\\.mix$/)) {`;
+
+  if (!src.includes(oldBlock)) {
+    console.error('Expected language.mix import block not found.');
+    process.exit(1);
+  }
+
+  src = src.replace(oldBlock, newBlock);
+  fs.writeFileSync(file, src);
+}
+
 NODE
