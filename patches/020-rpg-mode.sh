@@ -97,16 +97,39 @@ export class RpgInteraction {
       order.set(this.hero, target);
 
       if (order.isValid() && order.isAllowed()) {
-        this.hero.unitOrderTrait.addOrder(order, false);
+        const trait: any = this.hero.unitOrderTrait;
+        const previewTasks = order.process?.() ?? [];
+        const tickBefore = this.game.currentTick;
+
+        console.log('[RPG] Before addOrder', {
+          tick: tickBefore,
+          queuedOrders: trait?.orders?.length,
+          previewTasks: previewTasks.map((t: any) => t?.constructor?.name),
+          heroSpawned: this.hero?.isSpawned,
+          heroTile: this.hero?.tile ? { rx: this.hero.tile.rx, ry: this.hero.tile.ry } : null,
+        });
+
+        trait.addOrder(order, false);
+
+        console.log('[RPG] After addOrder', {
+          tick: this.game.currentTick,
+          queuedOrders: trait?.orders?.length,
+          hasTasks: trait?.hasTasks?.(),
+          currentTask: trait?.getCurrentTask?.()?.constructor?.name,
+        });
+
         console.log('[RPG] Move:', tile.rx, tile.ry);
 
         setTimeout(() => {
           try {
             console.log('[RPG] Movement diagnostic', {
+              tickBefore,
+              tickAfter: this.game.currentTick,
+              queuedOrders: trait?.orders?.length,
               heroTile: this.hero?.tile ? { rx: this.hero.tile.rx, ry: this.hero.tile.ry } : null,
               worldPosition: this.hero?.position?.worldPosition,
-              hasTasks: this.hero?.unitOrderTrait?.hasTasks?.(),
-              currentTask: this.hero?.unitOrderTrait?.getCurrentTask?.()?.constructor?.name,
+              hasTasks: trait?.hasTasks?.(),
+              currentTask: trait?.getCurrentTask?.()?.constructor?.name,
               moveState: this.hero?.moveTrait?.moveState,
               isMoving: this.hero?.moveTrait?.isMoving?.(),
             });
