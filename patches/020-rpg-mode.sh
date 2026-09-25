@@ -10,7 +10,7 @@ import { MoveOrder } from '@/game/order/MoveOrder';
 import { AttackOrder } from '@/game/order/AttackOrder';
 
 export class RpgInteraction {
-  private disposeClick?: () => void;
+  private disposeCanvas?: () => void;
   private hero?: any;
   private badge?: HTMLDivElement;
 
@@ -18,7 +18,8 @@ export class RpgInteraction {
     private game: any,
     private localPlayer: any,
     private worldScene: any,
-    private pointer: any
+    private pointer: any,
+    private renderer: any
   ) {}
 
   init(): void {
@@ -33,18 +34,28 @@ export class RpgInteraction {
     this.showBadge('RPG MODE · ' + (this.hero.name || 'Hero'));
 
     const helper = new MapTileIntersectHelper(this.game.map, this.worldScene);
-    const pointerEvents = this.pointer?.pointerEvents;
-    const sceneObject = this.worldScene?.get3DObject?.() ?? this.worldScene?.scene;
+    const canvas = this.renderer?.getCanvas?.();
 
-    if (!pointerEvents || !sceneObject) {
-      console.warn('[RPG] Pointer events or world scene unavailable.');
+    if (!canvas) {
+      console.warn('[RPG] Renderer canvas unavailable.');
       return;
     }
 
-    this.disposeClick = pointerEvents.addEventListener(sceneObject, 'click', (event: any) => {
+    const handleMouseUp = (event: MouseEvent) => {
       if (event.button !== 0 && event.button !== 2) return;
 
-      const tile = helper.getTileAtScreenPoint(event.pointer);
+      const rect = canvas.getBoundingClientRect();
+      const pointer = {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      };
+
+      const tile = helper.getTileAtScreenPoint(pointer);
+      console.log('[RPG] Move click received', {
+        button: event.button,
+        pointer,
+        tile: tile ? { rx: tile.rx, ry: tile.ry, z: tile.z } : null,
+      });
       if (!tile || !this.hero || this.hero.isDestroyed || this.hero.isDisposed) return;
 
       const objects = this.game.map.getObjectsOnTile?.(tile) ?? [];
@@ -64,7 +75,8 @@ export class RpgInteraction {
         if (order.isValid() && order.isAllowed()) {
           this.hero.unitOrderTrait.addOrder(order, false);
           console.log('[RPG] Attack:', enemy.name ?? enemy.id);
-          event.stopPropagation?.();
+          event.preventDefault();
+          event.stopPropagation();
           return;
         }
       }
@@ -76,14 +88,18 @@ export class RpgInteraction {
       if (order.isValid() && order.isAllowed()) {
         this.hero.unitOrderTrait.addOrder(order, false);
         console.log('[RPG] Move:', tile.rx, tile.ry);
-        event.stopPropagation?.();
+        event.preventDefault();
+        event.stopPropagation();
       }
-    });
+    };
+
+    canvas.addEventListener('mouseup', handleMouseUp, true);
+    this.disposeCanvas = () => canvas.removeEventListener('mouseup', handleMouseUp, true);
   }
 
   dispose(): void {
-    this.disposeClick?.();
-    this.disposeClick = undefined;
+    this.disposeCanvas?.();
+    this.disposeCanvas = undefined;
     this.badge?.remove();
     this.badge = undefined;
   }
@@ -142,7 +158,7 @@ const fs = require('fs');
   if (src.includes(marker) && !src.includes("new RpgInteraction(")) {
     src = src.replace(
       marker,
-      marker + `\n\n    const rpgMode = new URLSearchParams(window.location.search).get('rpg') === '1';\n    if (rpgMode) {\n      this.rpgInteraction = new RpgInteraction(this.game, this.localPlayer, this.worldScene, this.pointer);\n      this.rpgInteraction.init();\n      this.disposables.add(this.rpgInteraction);\n    }`
+      marker + `\n\n    const rpgMode = new URLSearchParams(window.location.search).get('rpg') === '1';\n    if (rpgMode) {\n      this.rpgInteraction = new RpgInteraction(this.game, this.localPlayer, this.worldScene, this.pointer, this.renderer);\n      this.rpgInteraction.init();\n      this.disposables.add(this.rpgInteraction);\n    }`
     );
   }
 
