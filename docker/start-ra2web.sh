@@ -12,7 +12,7 @@ fi
 
 if [ ! -d /app/.git ]; then
   echo "Cloning RA2 Web into persistent Docker volume..."
-  find /app -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+  rm -rf /app/*
   git clone "$REPO" /app
 fi
 
@@ -37,6 +37,11 @@ if [ -f src/engine/gameRes/GameRes.ts ]; then
   sed -i 's#../../util/Logger#../../util/logger#g' src/engine/gameRes/GameRes.ts
 fi
 
+# Expose the user's local RA2 files to Vite without nesting a Docker mount inside /app.
+mkdir -p /app/public
+rm -rf /app/public/original-game
+ln -s /original-game /app/public/original-game
+
 # Apply local patch scripts in lexical order.
 if [ -d /workspace/patches ]; then
   while IFS= read -r patch_script; do
@@ -57,9 +62,9 @@ else
   echo "npm dependencies already up to date."
 fi
 
-if [ -d /app/public/original-game ]; then
+if [ -d /original-game ]; then
   echo "Original RA2 files mounted:"
-  find /app/public/original-game -maxdepth 1 -type f -printf '  %f\n' | sort | head -100 || true
+  find /original-game -maxdepth 1 -type f -printf '  %f\n' | sort | head -100 || true
 else
   echo "WARNING: original-game is not mounted."
 fi
