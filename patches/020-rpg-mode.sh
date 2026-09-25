@@ -211,4 +211,51 @@ const fs = require('fs');
   fs.writeFileSync(file, src);
 }
 
+
+// Centralize fatal error diagnostics so every message box includes the actual exception.
+{
+  const file = 'src/ErrorHandler.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  src = src.replace(
+    `  handle(error: any, message: string, callback?: () => void): void {
+    if (!this.isErrorState) {`,
+    `  handle(error: any, message: string, callback?: () => void): void {
+    const technical = error instanceof Error
+      ? (error.stack || error.message)
+      : (typeof error === 'string' ? error : JSON.stringify(error));
+
+    if (technical && !message.includes('Technical details:')) {
+      message += '\\n\\nTechnical details:\\n' + technical;
+    }
+
+    if (!this.isErrorState) {`
+  );
+
+  fs.writeFileSync(file, src);
+}
+
+// Suppress replay save attempts when the game never reached a valid running state.
+{
+  const file = 'src/gui/screen/game/GameScreen.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  src = src.replace(
+    `  private handleGameError(error: any, message: string, game: any, debugDataProvider?: () => Promise<any>, isCustomMap?: boolean): void {
+    // Simplified game error handling
+    const replay = this.replay;
+    if (replay) {
+      this.saveReplay(replay);
+    }`,
+    `  private handleGameError(error: any, message: string, game: any, debugDataProvider?: () => Promise<any>, isCustomMap?: boolean): void {
+    // Only save replay after the game has actually started.
+    const replay = this.replay;
+    if (replay && game?.status === GameStatus.Started) {
+      this.saveReplay(replay);
+    }`
+  );
+
+  fs.writeFileSync(file, src);
+}
+
 NODE
