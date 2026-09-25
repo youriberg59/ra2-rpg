@@ -544,4 +544,147 @@ const fs = require('fs');
   fs.writeFileSync(file, src);
 }
 
+
+// Keep HUD above WorldScene, add camera controls, and show a live RPG hero marker.
+{
+  // 1) Render ordering: world first, UI last.
+  const gameScreenFile = 'src/gui/screen/game/GameScreen.ts';
+  let gs = fs.readFileSync(gameScreenFile, 'utf8');
+
+  const reg = `    this.renderer.addScene?.(worldViewInit.worldScene);
+    this.disposables.add(() => {`;
+
+  const reg2 = `    this.renderer.addScene?.(worldViewInit.worldScene);
+
+    // Renderer uses insertion order. UiScene was registered first, so re-add it
+    // after WorldScene to keep the HUD/sidebar above the battlefield.
+    if (this.uiScene) {
+      this.renderer.removeScene?.(this.uiScene);
+      this.renderer.addScene?.(this.uiScene);
+    }
+
+    this.disposables.add(() => {`;
+
+  if (gs.includes(reg) && !gs.includes('keep the HUD/sidebar above the battlefield')) {
+    gs = gs.replace(reg, reg2);
+  }
+  fs.writeFileSync(gameScreenFile, gs);
+
+  // 2) Camera controls and temporary hero marker in WorldView.
+  const worldViewFile = 'src/gui/screen/game/WorldView.ts';
+  let wv = fs.readFileSync(worldViewFile, 'utf8');
+
+  if (!wv.includes("import * as THREE from 'three';")) {
+    wv = wv.replace(
+      "import { IsoCoords } from '@/engine/IsoCoords';",
+      "import { IsoCoords } from '@/engine/IsoCoords';\nimport * as THREE from 'three';"
+    );
+  }
+
+  const marker = "    console.log('[WorldView] Real map tile layer attached.', {";
+  const controls = `
+    // Camera controls: arrow keys + middle-mouse drag.
+    const canvas = this.renderer.getCanvas?.();
+    if (canvas) {
+      let dragging = false;
+      let lastX = 0;
+      let lastY = 0;
+
+      const applyPanDelta = (dx: number, dy: number) => {
+        const current = worldScene.cameraPan.getPan();
+        const next = { x: current.x + dx, y: current.y + dy };
+        worldScene.cameraPan.setPan(next);
+        worldScene.updateCamera(worldScene.cameraPan.getPan(), worldScene.cameraZoom.getZoom());
+      };
+
+      const onMouseDown = (ev: MouseEvent) => {
+        if (ev.button === 1) {
+          dragging = true;
+          lastX = ev.clientX;
+          lastY = ev.clientY;
+          ev.preventDefault();
+        }
+      };
+      const onMouseMove = (ev: MouseEvent) => {
+        if (!dragging) return;
+        const dx = lastX - ev.clientX;
+        const dy = lastY - ev.clientY;
+        lastX = ev.clientX;
+        lastY = ev.clientY;
+        applyPanDelta(dx, dy);
+      };
+      const onMouseUp = (ev: MouseEvent) => {
+        if (ev.button === 1) dragging = false;
+      };
+      const onKeyDown = (ev: KeyboardEvent) => {
+        const step = ev.shiftKey ? 80 : 28;
+        if (ev.key === 'ArrowLeft') applyPanDelta(-step, 0);
+        else if (ev.key === 'ArrowRight') applyPanDelta(step, 0);
+        else if (ev.key === 'ArrowUp') applyPanDelta(0, -step);
+        else if (ev.key === 'ArrowDown') applyPanDelta(0, step);
+        else return;
+        ev.preventDefault();
+      };
+
+      canvas.addEventListener('mousedown', onMouseDown);
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+      window.addEventListener('keydown', onKeyDown);
+
+      this.disposables.add(() => {
+        canvas.removeEventListener('mousedown', onMouseDown);
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+        window.removeEventListener('keydown', onKeyDown);
+      });
+    }
+
+    // Temporary visible marker for the single RPG hero while the full RA2
+    // RenderableManager is being restored.
+    const rpgMode = new URLSearchParams(window.location.search).get('rpg') === '1';
+    if (rpgMode) {
+      const hero = (localPlayer?.getOwnedObjects?.() ?? []).find((obj: any) =>
+        !obj?.isDestroyed && obj?.unitOrderTrait && (obj?.isInfantry?.() || obj?.isUnit?.())
+      );
+
+      if (hero?.position?.worldPosition) {
+        const geometry = new THREE.CylinderGeometry(55, 55, 16, 24);
+        const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+        const heroMarker = new THREE.Mesh(geometry, material);
+        heroMarker.name = 'rpg_hero_marker';
+        heroMarker.position.set(
+          hero.position.worldPosition.x,
+          hero.position.worldPosition.y + 12,
+          hero.position.worldPosition.z
+        );
+        worldScene.scene.add(heroMarker);
+
+        const updateHeroMarker = () => {
+          const p = hero.position.worldPosition;
+          heroMarker.position.set(p.x, p.y + 12, p.z);
+          heroMarker.updateMatrix();
+        };
+        hero.position.onPositionChange?.subscribe(updateHeroMarker);
+
+        this.disposables.add(() => {
+          hero.position.onPositionChange?.unsubscribe(updateHeroMarker);
+          worldScene.scene.remove(heroMarker);
+          geometry.dispose();
+          material.dispose();
+        });
+
+        console.log('[WorldView] RPG hero marker attached.', hero.name, hero.id);
+      } else {
+        console.warn('[WorldView] RPG mode active but no controllable hero found.');
+      }
+    }
+
+`;
+
+  if (wv.includes(marker) && !wv.includes('Camera controls: arrow keys + middle-mouse drag.')) {
+    wv = wv.replace(marker, controls + marker);
+  }
+  fs.writeFileSync(worldViewFile, wv);
+}
+
 NODE
