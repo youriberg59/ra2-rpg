@@ -519,10 +519,20 @@ const fs = require('fs');
       }
 
       if (count) {
-        const center = { x: sx / count, y: sy / count };
-        worldScene.cameraPan.setPan(center);
-        worldScene.updateCamera(center, worldScene.cameraZoom.getZoom());
-        console.log('[WorldView] Camera centered on map.', center);
+        const projectedCenter = { x: sx / count, y: sy / count };
+        const projectedOrigin = IsoCoords.worldToScreen(0, 0);
+        const pan = {
+          x: projectedCenter.x - projectedOrigin.x,
+          y: projectedCenter.y - projectedOrigin.y,
+        };
+
+        worldScene.cameraPan.setPan(pan);
+        worldScene.updateCamera(pan, worldScene.cameraZoom.getZoom());
+        console.log('[WorldView] Camera centered on map.', {
+          projectedCenter,
+          projectedOrigin,
+          pan
+        });
       }
     }
 `;
