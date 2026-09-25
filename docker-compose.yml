@@ -4,7 +4,7 @@ services:
     working_dir: /app
     command: ["/bin/bash", "/workspace/docker/start-ra2web.sh"]
     ports:
-      - "127.0.0.1:8080:3000"
+      - "8080:3000"
     volumes:
       - ra2web_source:/app
       - ./docker:/workspace/docker:ro
