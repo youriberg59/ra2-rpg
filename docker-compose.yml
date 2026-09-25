@@ -7,7 +7,6 @@ services:
       - "8080:3000"
     volumes:
       - ra2web_source:/app
-      - ra2web_resources:/resource-cache
       - ./docker:/workspace/docker:ro
       - ./patches:/workspace/patches:ro
       - ./original-game:/original-game:ro
@@ -15,6 +14,21 @@ services:
       RA2WEB_REPO: https://github.com/DD-Channel/ra2-web.git
       RA2WEB_COMMIT: 786800b50fe19f7dbe1fa6243e364fd761c64198
       RA2_ORIGINAL_WEB_PATH: /original-game
+      RA2_ASSET_PORT: "8090"
+    depends_on:
+      - ra2-assets
+    restart: "no"
+
+  ra2-assets:
+    image: python:3.12-alpine
+    working_dir: /srv
+    command: ["python", "/workspace/docker/serve-assets.py"]
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./docker:/workspace/docker:ro
+      - ./original-game:/original-game:ro
+      - ra2web_resources:/resource-cache
     restart: "no"
 
 volumes:
