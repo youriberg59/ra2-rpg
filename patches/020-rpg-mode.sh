@@ -342,4 +342,49 @@ const fs = require('fs');
   fs.writeFileSync(file, src);
 }
 
+
+// Register the actual battlefield WorldScene with the renderer.
+// The upstream fork currently creates it but only registers UiScene,
+// resulting in a working HUD over a completely black battlefield.
+{
+  const file = 'src/gui/screen/game/GameScreen.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  const oldBlock = `    if (ws?.set3DObject && ws?.scene) {
+      ws.set3DObject(ws.scene);
+    }
+    worldViewInit.worldScene.create3DObject?.();
+
+    return {`;
+
+  const newBlock = `    if (ws?.set3DObject && ws?.scene) {
+      ws.set3DObject(ws.scene);
+    }
+    worldViewInit.worldScene.create3DObject?.();
+
+    // Critical: WorldScene must be registered separately from UiScene.
+    this.renderer.addScene?.(worldViewInit.worldScene);
+    this.disposables.add(() => {
+      try {
+        this.renderer.removeScene?.(worldViewInit.worldScene);
+      } catch (e) {
+        console.warn('[GameScreen] Failed to remove WorldScene from renderer', e);
+      }
+    });
+
+    console.log('[GameScreen] WorldScene registered with renderer.', {
+      scenes: this.renderer.getScenes?.().length
+    });
+
+    return {`;
+
+  if (!src.includes(oldBlock)) {
+    console.error('Expected WorldScene initialization block not found.');
+    process.exit(1);
+  }
+
+  src = src.replace(oldBlock, newBlock);
+  fs.writeFileSync(file, src);
+}
+
 NODE
