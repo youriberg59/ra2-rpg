@@ -33,6 +33,14 @@ export class RpgInteraction {
     console.log('[RPG] Hero selected:', this.hero.name, this.hero.id);
     this.showBadge('RPG MODE · ' + (this.hero.name || 'Hero'));
 
+    // RPG uses click-to-move, so absolute pointer position must stay meaningful.
+    try {
+      this.pointer?.unlock?.();
+      console.log('[RPG] Pointer lock disabled for click-to-move.');
+    } catch (e) {
+      console.warn('[RPG] Could not disable pointer lock:', e);
+    }
+
     const helper = new MapTileIntersectHelper(this.game.map, this.worldScene);
     const canvas = this.renderer?.getCanvas?.();
 
@@ -45,10 +53,13 @@ export class RpgInteraction {
       if (event.button !== 0 && event.button !== 2) return;
 
       const rect = canvas.getBoundingClientRect();
-      const pointer = {
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top,
-      };
+      const tracked = this.pointer?.getPosition?.();
+      const pointer = tracked
+        ? { x: tracked.x, y: tracked.y }
+        : {
+            x: event.clientX - rect.left,
+            y: event.clientY - rect.top,
+          };
 
       const tile = helper.getTileAtScreenPoint(pointer);
       console.log('[RPG] Move click received', {
@@ -88,6 +99,22 @@ export class RpgInteraction {
       if (order.isValid() && order.isAllowed()) {
         this.hero.unitOrderTrait.addOrder(order, false);
         console.log('[RPG] Move:', tile.rx, tile.ry);
+
+        setTimeout(() => {
+          try {
+            console.log('[RPG] Movement diagnostic', {
+              heroTile: this.hero?.tile ? { rx: this.hero.tile.rx, ry: this.hero.tile.ry } : null,
+              worldPosition: this.hero?.position?.worldPosition,
+              hasTasks: this.hero?.unitOrderTrait?.hasTasks?.(),
+              currentTask: this.hero?.unitOrderTrait?.getCurrentTask?.()?.constructor?.name,
+              moveState: this.hero?.moveTrait?.moveState,
+              isMoving: this.hero?.moveTrait?.isMoving?.(),
+            });
+          } catch (e) {
+            console.warn('[RPG] Movement diagnostic failed', e);
+          }
+        }, 250);
+
         event.preventDefault();
         event.stopPropagation();
       }
