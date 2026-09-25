@@ -7,7 +7,7 @@ echo "Applying centralized server-assets and English-language patch..."
 
 if [ -f public/config.ini ]; then
   sed -i 's#^defaultLanguage=.*#defaultLanguage=en-US#' public/config.ini
-  sed -i 's#^gameResArchiveUrl=.*#gameResArchiveUrl=/original-game-pack.tar#' public/config.ini
+  sed -i 's#^gameResArchiveUrl=.*#gameResArchiveUrl=/__SERVER_RA2_ARCHIVE__#' public/config.ini
 fi
 
 node <<'NODE'
@@ -27,7 +27,11 @@ const newBlock = `      console.log('[GameRes] Resolving game resource source');
       let userSelection: URL | FileSystemFileHandle | FileSystemDirectoryHandle | undefined;
 
       if (archiveUrlFallback) {
-        userSelection = new URL(archiveUrlFallback, window.location.href);
+        const assetPort = '8090';
+        const archiveUrl = archiveUrlFallback.includes('__SERVER_RA2_ARCHIVE__')
+          ? `${window.location.protocol}//${window.location.hostname}:${assetPort}/original-game-pack.zip`
+          : archiveUrlFallback;
+        userSelection = new URL(archiveUrl, window.location.href);
         console.log('[GameRes] Auto-importing server-hosted RA2 archive:', userSelection.toString());
       } else {
         userSelection = await gameResBoxApi.promptForGameRes(
