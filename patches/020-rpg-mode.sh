@@ -1222,8 +1222,8 @@ const fs = require('fs');
 
   if (!src.includes("import { Vector2 }")) {
     src = src.replace(
-      "import { MoveTargetTask } from "@/game/gameobject/task/move/MoveTargetTask";",
-      "import { MoveTargetTask } from "@/game/gameobject/task/move/MoveTargetTask";\nimport { Vector2 } from "@/game/math/Vector2";"
+      'import { MoveTargetTask } from "@/game/gameobject/task/move/MoveTargetTask";',
+      'import { MoveTargetTask } from "@/game/gameobject/task/move/MoveTargetTask";\nimport { Vector2 } from "@/game/math/Vector2";'
     );
   }
 
