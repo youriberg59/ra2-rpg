@@ -32,10 +32,25 @@ fi
 git reset --hard "$COMMIT"
 git clean -fd
 
-# Linux is case-sensitive; upstream currently has logger.ts but one import uses Logger.
-if [ -f src/engine/gameRes/GameRes.ts ]; then
-  sed -i 's#../../util/Logger#../../util/logger#g' src/engine/gameRes/GameRes.ts
-fi
+# Linux is case-sensitive. The upstream project contains several imports whose
+# filename casing matches Windows but not the actual files in src/util/.
+# Normalize the known lowercase utility modules before Vite starts.
+find src -type f \( -name '*.ts' -o -name '*.tsx' \) -print0 | xargs -0 sed -i \
+  -e 's#/util/Logger#/util/logger#g' \
+  -e 's#/util/Array#/util/array#g' \
+  -e 's#/util/Mouse#/util/mouse#g' \
+  -e 's#/util/String#/util/string#g' \
+  -e 's#/util/Math#/util/math#g' \
+  -e 's#/util/Event#/util/event#g' \
+  -e 's#/util/Dom#/util/dom#g' \
+  -e 's#/util/Format#/util/format#g' \
+  -e 's#/util/Geometry#/util/geometry#g' \
+  -e 's#/util/Number#/util/number#g' \
+  -e 's#/util/Stream#/util/stream#g' \
+  -e 's#/util/Time#/util/time#g' \
+  -e 's#/util/UserAgent#/util/userAgent#g' \
+  -e 's#/util/KeyNames#/util/keyNames#g' \
+  -e 's#/util/FullScreen#/util/fullScreen#g'
 
 # Expose the user's local RA2 files to Vite without nesting a Docker mount inside /app.
 mkdir -p /app/public
