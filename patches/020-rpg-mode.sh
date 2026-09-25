@@ -809,4 +809,40 @@ const fs = require('fs');
   fs.writeFileSync(file, src);
 }
 
+
+// In RPG mode, hard-lock the camera to the hero and disable manual camera panning.
+{
+  const file = 'src/gui/screen/game/WorldView.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  // Manual camera controls remain available in RTS mode only.
+  src = src.replace(
+    `    const canvas = this.renderer.getCanvas?.();
+    if (canvas) {`,
+    `    const canvas = this.renderer.getCanvas?.();
+    const cameraLockedToHero = new URLSearchParams(window.location.search).get('rpg') === '1';
+    if (canvas && !cameraLockedToHero) {`
+  );
+
+  // Follow the hero every time its position changes.
+  src = src.replace(
+    `        const updateHeroMarker = () => {
+          const p = hero.position.worldPosition;
+          heroMarker.position.set(p.x, p.y + 12, p.z);
+          heroMarker.updateMatrix();
+        };`,
+    `        const updateHeroMarker = () => {
+          const p = hero.position.worldPosition;
+          heroMarker.position.set(p.x, p.y + 12, p.z);
+          heroMarker.updateMatrix();
+
+          const heroPan = new MapPanningHelper(this.game.map).computeCameraPanFromWorld(p);
+          worldScene.cameraPan.setPan(heroPan);
+          worldScene.updateCamera(worldScene.cameraPan.getPan(), worldScene.cameraZoom.getZoom());
+        };`
+  );
+
+  fs.writeFileSync(file, src);
+}
+
 NODE
