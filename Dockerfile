@@ -1,16 +1,10 @@
-FROM node:22-alpine
+FROM alpine:3.20
 
-WORKDIR /app
+RUN apk add --no-cache zip
 
-COPY server/package.json ./server/package.json
-RUN cd server && npm install --omit=dev
+WORKDIR /workspace
 
-COPY server ./server
-COPY client ./client
-COPY content ./content
+COPY tools/package-mod.sh /usr/local/bin/package-mod
+RUN chmod +x /usr/local/bin/package-mod
 
-WORKDIR /app/server
-
-EXPOSE 8080
-
-CMD ["node", "src/index.js"]
+ENTRYPOINT ["package-mod"]
