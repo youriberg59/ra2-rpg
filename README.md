@@ -1,142 +1,133 @@
 # RA2 RPG — self-hosted RA2 Web workspace
 
-This repository now runs a **self-hosted browser RA2 engine in Docker** using the GPL-3.0 project [DD-Channel/ra2-web](https://github.com/DD-Channel/ra2-web) as the upstream codebase.
+This project runs a self-hosted browser RA2 engine using the GPL-3.0 project [DD-Channel/ra2-web](https://github.com/DD-Channel/ra2-web) as the upstream codebase.
 
-The long-term goal is to modify that engine into an isometric action-RPG experience while reusing Red Alert 2 file formats, rendering and game logic.
+The goal is to progressively turn it into an isometric action-RPG while reusing Red Alert 2 formats, rendering and game logic.
 
-## Important status
+## No rebuild workflow
 
-The upstream RA2 Web project is still under development. It already contains parsers/rendering support for MIX, SHP, VXL, TMP, INI and other Red Alert 2 formats, but not every original-game feature is complete.
+The Docker setup is now intentionally designed so normal updates do **not** require rebuilding an image.
 
-This repository currently provides the **self-hosted Docker foundation**. RPG engine changes will be added as patches/overrides on top of the pinned upstream source.
+RA2 Web itself is stored in a persistent Docker volume. Our startup script, RPG patches and original game files are bind-mounted from your working copy.
 
-## Original Red Alert 2 files
+Normal update:
 
-Put your legally owned original game files in:
-
-```text
-C:\ra2-rpg\original-game\
+```powershell
+cd C:\ra2-rpg
+git pull
+docker compose restart ra2-web
 ```
 
-For example:
+If the container is stopped:
 
-```text
-original-game/
-  ra2.mix
-  language.mix
-  multi.mix
-  cache.mix
-  local.mix
-  conquer.mix
-  neutral.mix
-  generic.mix
-  ...
+```powershell
+docker compose up -d
 ```
 
-The directory is excluded from Git.
-
-At runtime Docker mounts it read-only at:
+You should not normally need:
 
 ```text
-/app/public/original-game
+docker compose build
+docker compose up --build
 ```
 
-so the files are available only through the local web application.
+## First start after this migration
 
-The Docker port is deliberately bound to:
-
-```text
-127.0.0.1:8080
-```
-
-rather than all network interfaces, to avoid exposing your original game archives to the LAN.
-
-## Start the self-hosted client
-
-From PowerShell:
+Because the Compose architecture changed from a custom-built image to a persistent source volume, run once:
 
 ```powershell
 cd C:\ra2-rpg
 git pull
 docker compose down
-docker compose up --build -d
+docker compose up -d
 ```
 
 Then open:
 
 ```text
-http://localhost:8080
+http://127.0.0.1:8080
 ```
 
-To follow logs:
+The first launch may take longer because it clones the upstream RA2 Web repository and runs `npm ci`. Subsequent restarts reuse both the source checkout and `node_modules`.
 
-```powershell
-docker compose logs -f ra2-web
-```
+## Original Red Alert 2 files
 
-To stop it:
-
-```powershell
-docker compose down
-```
-
-## Architecture
+Put your legally owned files in:
 
 ```text
-Browser
-   |
-   v
-localhost:8080
-   |
-   v
-Docker / Vite
-   |
-   +-- DD-Channel/ra2-web source
-   |
-   +-- /original-game  <-- your local RA2 files, read-only
-   |
-   +-- future RPG patches
+C:\ra2-rpg\original-game\
 ```
 
-## Upstream version
+That folder remains excluded from Git.
 
-The Docker image currently pins RA2 Web commit:
+Docker mounts it read-only into:
 
 ```text
-786800b50fe19f7dbe1fa6243e364fd761c64198
+/app/public/original-game
 ```
 
-Pinning the commit makes our modifications reproducible instead of silently changing every time the upstream repository changes.
+The service is bound only to:
 
-## RPG modification strategy
+```text
+127.0.0.1:8080
+```
 
-Our changes will live under:
+so it is not intentionally exposed on your LAN.
+
+## Patch workflow
+
+RPG changes live under:
 
 ```text
 patches/
 ```
 
-and later be applied during the Docker build/start process.
+Shell patch scripts named `*.sh` are applied automatically at every container start, in alphabetical order.
 
-Planned engine changes:
+This means future changes can usually be deployed with only:
 
-- click-to-move single-character controls
-- hero-centric gameplay instead of RTS unit selection
-- visible projectiles and weapon effects
-- NPC interaction/dialogues
+```powershell
+git pull
+docker compose restart ra2-web
+```
+
+The startup process resets the upstream source to the pinned commit first, then reapplies our patches. This keeps the environment reproducible.
+
+## Upstream version
+
+Pinned upstream commit:
+
+```text
+786800b50fe19f7dbe1fa6243e364fd761c64198
+```
+
+## Logs
+
+```powershell
+docker compose logs -f ra2-web
+```
+
+## Verify your original files inside the container
+
+```powershell
+docker compose exec ra2-web bash -lc "ls -lah /app/public/original-game | head -50"
+```
+
+## Planned RPG work
+
+- automatic loading of local RA2 resources
+- single-character / hero-centric controls
+- click-to-move
+- visible weapons/projectiles
+- NPC interaction and dialogue
 - inventory and loot
 - quests
 - persistent character state
 - large isometric RPG maps
-- custom characters/buildings/items
-- multiplayer RPG synchronization
+- custom characters, buildings and items
 
 ## Licensing
 
-The upstream RA2 Web project states that it is GPL-3.0. Any distributed derivative code based on it must therefore remain compatible with GPL-3.0 and provide source code.
+The upstream project states that it is GPL-3.0. Derivative distributed code must remain compatible with that license and make source code available.
 
-Red Alert 2 itself and its original data files remain EA's intellectual property and are **not included in this repository**.
-
-## Previous Chrono Divide Mod SDK files
-
-The old `mod/` directory is retained for reference while the project transitions to the self-hosted engine. The active Docker service is now `ra2-web`, not the previous `mod-builder`.
+Original Red Alert 2 data files remain EA's intellectual property and are not included in this repository.
