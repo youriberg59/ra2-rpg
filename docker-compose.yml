@@ -1,13 +1,20 @@
 services:
   ra2-web:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: node:20-bookworm
+    working_dir: /app
+    command: ["/bin/bash", "/workspace/docker/start-ra2web.sh"]
     ports:
       - "127.0.0.1:8080:3000"
     volumes:
-      - ./original-game:/app/public/original-game:ro
+      - ra2web_source:/app
+      - ./docker:/workspace/docker:ro
       - ./patches:/workspace/patches:ro
+      - ./original-game:/app/public/original-game:ro
     environment:
+      RA2WEB_REPO: https://github.com/DD-Channel/ra2-web.git
+      RA2WEB_COMMIT: 786800b50fe19f7dbe1fa6243e364fd761c64198
       RA2_ORIGINAL_WEB_PATH: /original-game
     restart: unless-stopped
+
+volumes:
+  ra2web_source:
