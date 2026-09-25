@@ -861,4 +861,83 @@ const fs = require('fs');
   fs.writeFileSync(file, src);
 }
 
+
+// Fix screen -> tile conversion for RPG clicks.
+// The upstream helper mixed absolute canvas coordinates with viewport-relative camera pan,
+// causing different clicks to resolve to the same map tile.
+{
+  const file = 'src/engine/util/MapTileIntersectHelper.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  src = src.replace(
+`interface Scene {
+  viewport: Viewport;
+  cameraPan: CameraPan;
+}`,
+`interface Scene {
+  viewport: Viewport;
+  cameraPan: CameraPan;
+  cameraZoom?: { getZoom(): number };
+}`
+  );
+
+  const oldMethod = `  getTileAtScreenPoint(screenPoint: Point): MapTile | undefined {
+    const viewport = this.scene.viewport;
+    if (rectContainsPoint(viewport, screenPoint)) {
+      const intersectedTiles = this.intersectTilesByScreenPos(screenPoint);
+      return intersectedTiles.length > 0 ? intersectedTiles[0] : undefined;
+    }
+    return undefined;
+  }`;
+
+  const newMethod = `  getTileAtScreenPoint(screenPoint: Point): MapTile | undefined {
+    const viewport = this.scene.viewport;
+    if (!rectContainsPoint(viewport, screenPoint)) {
+      return undefined;
+    }
+
+    const origin = IsoCoords.worldToScreen(0, 0);
+    const pan = this.scene.cameraPan.getPan();
+    const zoom = this.scene.cameraZoom?.getZoom?.() ?? 1;
+
+    // Convert absolute canvas coordinates to offsets from the center of the
+    // world viewport, then undo camera zoom and pan.
+    const localX = screenPoint.x - viewport.x - viewport.width / 2;
+    const localY = screenPoint.y - viewport.y - viewport.height / 2;
+
+    const worldScreenX = origin.x + pan.x + localX / zoom;
+    const worldScreenY = origin.y + pan.y + localY / zoom;
+
+    const worldPos = IsoCoords.screenToWorld(worldScreenX, worldScreenY);
+    const tileX = Math.floor(worldPos.x / Coords.LEPTONS_PER_TILE);
+    const tileY = Math.floor(worldPos.y / Coords.LEPTONS_PER_TILE);
+
+    // Prefer the exact tile; if elevation/edge projection puts us just over a
+    // boundary, choose the nearest valid neighboring tile.
+    const exact = this.map.tiles.getByMapCoords(tileX, tileY);
+    if (exact) {
+      return exact;
+    }
+
+    for (let radius = 1; radius <= 2; radius++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        for (let dy = -radius; dy <= radius; dy++) {
+          const tile = this.map.tiles.getByMapCoords(tileX + dx, tileY + dy);
+          if (tile) return tile;
+        }
+      }
+    }
+
+    return undefined;
+  }`;
+
+  if (!src.includes(oldMethod)) {
+    console.error('Expected MapTileIntersectHelper.getTileAtScreenPoint block not found.');
+    process.exit(1);
+  }
+
+  src = src.replace(oldMethod, newMethod);
+  fs.writeFileSync(file, src);
+}
+
 NODE
