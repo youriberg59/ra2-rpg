@@ -1087,4 +1087,68 @@ const fs = require('fs');
   fs.writeFileSync(file, src);
 }
 
+
+// Fix misuse of Traits.filter() inside MoveTrait.
+// Traits.filter expects a trait interface descriptor, not an Array.filter callback.
+// Passing arrow functions caused "Function has non-object prototype 'undefined' in instanceof check"
+// as soon as a moving unit crossed a tile.
+{
+  const file = 'src/game/gameobject/trait/MoveTrait.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  src = src.replace(
+`    gameObject.traits.filter((trait): trait is typeof NotifyTeleport => 
+      'onBeforeTeleport' in trait
+    ).forEach(trait => {
+      trait[NotifyTeleport.onBeforeTeleport](gameObject, gameState, fromTile, preserveMovement);
+    });`,
+`    gameObject.traits.filter(NotifyTeleport).forEach((trait: any) => {
+      trait[NotifyTeleport.onBeforeTeleport](gameObject, gameState, fromTile, preserveMovement);
+    });`
+  );
+
+  src = src.replace(
+`    gameState.traits.filter((trait): trait is typeof GlobalNotifyTileChange => 
+      'onTileChange' in trait
+    ).forEach(trait => {
+      trait[GlobalNotifyTileChange.onTileChange](gameObject, gameState, oldTile, isTeleport);
+    });`,
+`    gameState.traits.filter(GlobalNotifyTileChange).forEach((trait: any) => {
+      trait[GlobalNotifyTileChange.onTileChange](gameObject, gameState, oldTile, isTeleport);
+    });`
+  );
+
+  src = src.replace(
+`    gameObject.traits.filter((trait): trait is typeof NotifyTileChange => 
+      'onTileChange' in trait
+    ).forEach(trait => {
+      trait[NotifyTileChange.onTileChange](gameObject, gameState, oldTile, isTeleport);
+    });`,
+`    gameObject.traits.filter(NotifyTileChange).forEach((trait: any) => {
+      trait[NotifyTileChange.onTileChange](gameObject, gameState, oldTile, isTeleport);
+    });`
+  );
+
+  src = src.replace(
+`    gameState.traits.filter((trait): trait is typeof NotifyElevationChange => 
+      'onElevationChange' in trait
+    ).forEach(trait => {
+      trait[NotifyElevationChange.onElevationChange](
+        this.gameObject,
+        gameState,
+        oldElevation
+      );
+    });`,
+`    gameState.traits.filter(NotifyElevationChange).forEach((trait: any) => {
+      trait[NotifyElevationChange.onElevationChange](
+        this.gameObject,
+        gameState,
+        oldElevation
+      );
+    });`
+  );
+
+  fs.writeFileSync(file, src);
+}
+
 NODE
