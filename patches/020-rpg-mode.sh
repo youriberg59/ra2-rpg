@@ -258,4 +258,50 @@ const fs = require('fs');
   fs.writeFileSync(file, src);
 }
 
+
+// Make all skirmish AI difficulties start even when optional upstream bot libraries are missing.
+{
+  const file = 'src/game/bot/BotFactory.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  const oldSwitch = `    switch (player.aiDifficulty) {
+      case AiDifficulty.Easy:
+        return new DummyBot(player.name, player.country.name);
+      case AiDifficulty.Medium:
+        if (this.botsLib.SupalosaBot) {
+          return new this.botsLib.SupalosaBot(player.name, player.country.name);
+        }
+      default:
+        throw new Error(\`Unsupported AI difficulty "\${player.aiDifficulty}"\`);
+    }`;
+
+  const newSwitch = `    switch (player.aiDifficulty) {
+      case AiDifficulty.Easy:
+        return new DummyBot(player.name, player.country.name);
+
+      case AiDifficulty.Medium:
+        if (this.botsLib?.SupalosaBot) {
+          return new this.botsLib.SupalosaBot(player.name, player.country.name);
+        }
+        console.warn('[BotFactory] SupalosaBot unavailable; using DummyBot for Medium AI.');
+        return new DummyBot(player.name, player.country.name);
+
+      case AiDifficulty.Brutal:
+        console.warn('[BotFactory] Brutal AI implementation unavailable; using DummyBot fallback.');
+        return new DummyBot(player.name, player.country.name);
+
+      default:
+        console.warn('[BotFactory] Unknown AI difficulty', player.aiDifficulty, '- using DummyBot fallback.');
+        return new DummyBot(player.name, player.country.name);
+    }`;
+
+  if (!src.includes(oldSwitch)) {
+    console.error('Expected BotFactory difficulty switch not found.');
+    process.exit(1);
+  }
+
+  src = src.replace(oldSwitch, newSwitch);
+  fs.writeFileSync(file, src);
+}
+
 NODE
