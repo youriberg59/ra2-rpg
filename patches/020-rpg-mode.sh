@@ -387,4 +387,92 @@ const fs = require('fs');
   fs.writeFileSync(file, src);
 }
 
+
+// Render the actual isometric terrain using the upstream MapTileLayer.
+// This is the first real world-rendering stage; units/buildings are wired next.
+{
+  const file = 'src/gui/screen/game/WorldView.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  if (!src.includes("import { MapTileLayer }")) {
+    src = src.replace(
+      "import { MapPanningHelper } from '@/engine/util/MapPanningHelper';",
+      "import { MapPanningHelper } from '@/engine/util/MapPanningHelper';\nimport { MapTileLayer } from '@/engine/renderable/entity/map/MapTileLayer';\nimport { Lighting } from '@/engine/Lighting';\nimport { ImageFinder } from '@/engine/ImageFinder';\nimport { BoxedVar } from '@/util/BoxedVar';"
+    );
+  }
+
+  const old = `    // Minimal placeholders for components not yet migrated
+    const worldSound = {};
+    const superWeaponFxHandler = this.createSuperWeaponFxHandler();
+    const beaconFxHandler = this.createBeaconFxHandler();
+    const renderableManager = this.createRenderableManager();
+
+    // Configure viewport
+    this.setupViewport(viewport);
+
+    return {
+      worldScene,
+      worldSound,
+      superWeaponFxHandler,
+      beaconFxHandler,
+      renderableManager
+    };`;
+
+  const neu = `    // First real rendering stage: draw the actual RA2 isometric map tiles.
+    const lighting = new Lighting();
+    const imageFinder = new ImageFinder(Engine.getImages() as any, theater);
+    const debugWireframe = this.runtimeVars?.debugWireframes ?? new BoxedVar(false);
+
+    const mapTileLayer = new MapTileLayer(
+      this.game.map,
+      theater,
+      this.game.art,
+      imageFinder,
+      worldScene.camera,
+      debugWireframe,
+      this.game.speed,
+      null,
+      lighting,
+      false
+    );
+
+    worldScene.add(mapTileLayer as any);
+    this.disposables.add(
+      mapTileLayer as any,
+      lighting as any,
+      () => {
+        try {
+          worldScene.remove(mapTileLayer as any);
+        } catch {}
+      }
+    );
+
+    const worldSound = {};
+    const superWeaponFxHandler = this.createSuperWeaponFxHandler();
+    const beaconFxHandler = this.createBeaconFxHandler();
+    const renderableManager = this.createRenderableManager();
+
+    this.setupViewport(viewport);
+
+    console.log('[WorldView] Real map tile layer attached.', {
+      tiles: this.game.map?.tiles?.getAll?.().length
+    });
+
+    return {
+      worldScene,
+      worldSound,
+      superWeaponFxHandler,
+      beaconFxHandler,
+      renderableManager
+    };`;
+
+  if (!src.includes(old)) {
+    console.error('Expected WorldView placeholder block not found.');
+    process.exit(1);
+  }
+
+  src = src.replace(old, neu);
+  fs.writeFileSync(file, src);
+}
+
 NODE
