@@ -7,6 +7,7 @@ services:
       - "8080:3000"
     volumes:
       - ra2web_source:/app
+      - ra2web_resources:/resource-cache
       - ./docker:/workspace/docker:ro
       - ./patches:/workspace/patches:ro
       - ./original-game:/original-game:ro
@@ -18,3 +19,4 @@ services:
 
 volumes:
   ra2web_source:
+  ra2web_resources:
