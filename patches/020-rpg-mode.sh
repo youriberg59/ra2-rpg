@@ -42,7 +42,7 @@ export class RpgInteraction {
     }
 
     this.disposeClick = pointerEvents.addEventListener(sceneObject, 'click', (event: any) => {
-      if (event.button !== 0) return;
+      if (event.button !== 0 && event.button !== 2) return;
 
       const tile = helper.getTileAtScreenPoint(event.pointer);
       if (!tile || !this.hero || this.hero.isDestroyed || this.hero.isDisposed) return;
