@@ -191,4 +191,70 @@ const fs = require('fs');
   fs.writeFileSync(file, src);
 }
 
+
+// Extend English overrides to Skirmish/lobby screens.
+{
+  const file = 'src/Application.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  const anchor = "      'STT:TestEntry': 'Open developer and storage tools',";
+  const extra = `
+      'GUI:SkirmishGame': 'Skirmish',
+      'GUI:Players': 'Players',
+      'GUI:Side': 'Country',
+      'GUI:Color': 'Color',
+      'GUI:StartPosition': 'Start',
+      'GUI:Team': 'Team',
+      'GUI:ShortGame': 'Quick Game',
+      'GUI:MCVRepacks': 'MCV Repacks',
+      'GUI:CratesAppear': 'Crates Appear',
+      'GUI:SuperWeaponsAllowed': 'Super Weapons',
+      'GUI:DestroyableBridges': 'Destroyable Bridges',
+      'GUI:MultiEngineer': 'Multi Engineer',
+      'GUI:NoDogEngiKills': 'No Dog Engineer Kills',
+      'GUI:GameSpeed': 'Game Speed',
+      'GUI:Credits': 'Credits',
+      'GUI:UnitCount': 'Unit Count',
+      'GUI:BuildOffAlly': 'Build Off Ally',
+      'GUI:StartGame': 'Start Game',
+      'GUI:ChooseMap': 'Choose Map',
+      'GUI:Back': 'Back',
+      'GUI:Open': 'Open',
+      'GUI:Closed': 'Closed',
+      'GUI:None': 'None',
+      'GUI:Random': 'Random',
+      'GUI:EasyEnemy': 'Easy Enemy',
+      'GUI:MediumEnemy': 'Medium Enemy',
+      'GUI:BrutalEnemy': 'Brutal Enemy',
+      'TXT_BATTLE': 'Battle',
+      'GUI:Battle': 'Battle',
+      'Name:Battle': 'Battle',
+      'GUI:HostTeams': 'Host Teams',
+`;
+
+  if (src.includes(anchor) && !src.includes("'GUI:SkirmishGame': 'Skirmish'")) {
+    src = src.replace(anchor, anchor + extra);
+  }
+
+  fs.writeFileSync(file, src);
+}
+
+// Add explicit English fallbacks in Skirmish screen for keys the Chinese CSF supplies.
+{
+  const file = 'src/gui/screen/mainMenu/lobby/SkirmishScreen.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  src = src
+    .replace('this.title = this.strings.get("GUI:SkirmishGame");',
+             'this.title = this.strings.get("GUI:SkirmishGame") || "Skirmish";')
+    .replace('label: this.strings.get("GUI:StartGame"),',
+             'label: this.strings.get("GUI:StartGame") || "Start Game",')
+    .replace('label: this.strings.get("GUI:ChooseMap"),',
+             'label: this.strings.get("GUI:ChooseMap") || "Choose Map",')
+    .replace('label: this.strings.get("GUI:Back"),',
+             'label: this.strings.get("GUI:Back") || "Back",');
+
+  fs.writeFileSync(file, src);
+}
+
 NODE
