@@ -12,7 +12,8 @@ WORKDIR /app
 RUN git clone "$RA2WEB_REPO" . \
  && git checkout "$RA2WEB_COMMIT"
 
-RUN npm ci
+RUN sed -i "s#../../util/Logger#../../util/logger#g" src/engine/gameRes/GameRes.ts \
+ && npm ci
 
 COPY docker/start-ra2web.sh /usr/local/bin/start-ra2web
 RUN sed -i 's/\r$//' /usr/local/bin/start-ra2web \
