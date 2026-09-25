@@ -1055,4 +1055,36 @@ const fs = require('fs');
   fs.writeFileSync(file, src);
 }
 
+
+// Harden BotManager against missing optional logger/bot instances in this fork.
+{
+  const file = 'src/game/BotManager.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  src = src.replace(
+`      if (actionLog) {
+        this.actionLogger.debug(\`(\${action.player.name})@\${gameState.currentTick}: \${actionLog}\`);
+      }`,
+`      if (actionLog) {
+        this.actionLogger?.debug?.(
+          \`(\${action.player?.name ?? 'AI'})@\${gameState.currentTick}: \${actionLog}\`
+        );
+      }`
+  );
+
+  src = src.replace(
+`    for (const combatant of gameState.getCombatants().filter((c: any) => c.isAi)) {
+      this.bots.get(combatant).onGameTick(this.gameApi);
+    }`,
+`    for (const combatant of gameState.getCombatants().filter((c: any) => c.isAi)) {
+      const bot = this.bots.get(combatant);
+      if (bot?.onGameTick) {
+        bot.onGameTick(this.gameApi);
+      }
+    }`
+  );
+
+  fs.writeFileSync(file, src);
+}
+
 NODE
