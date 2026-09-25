@@ -57,6 +57,12 @@ mkdir -p /app/public
 rm -rf /app/public/original-game
 ln -s /original-game /app/public/original-game
 
+# Build one server-side archive that new browsers can import automatically.
+# This avoids asking users to manually pick a local RA2 folder on every device.
+echo "Preparing centralized RA2 resource archive..."
+rm -f /app/public/original-game-pack.tar
+tar -cf /app/public/original-game-pack.tar -C /original-game .
+
 # Apply local patch scripts in lexical order.
 if [ -d /workspace/patches ]; then
   while IFS= read -r patch_script; do
