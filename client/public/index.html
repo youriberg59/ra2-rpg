@@ -36,7 +36,7 @@
   <div id="stats" class="panel"></div>
   <div id="quest" class="panel"></div>
   <div id="inventory" class="panel"></div>
-  <div id="help">WASD / arrows: move · Click enemy: attack · Click NPC: talk · Mouse wheel: zoom</div>
+  <div id="help">Click ground: move · Click enemy: shoot · Click NPC: talk · Mouse wheel: zoom</div>
   <div id="toast"></div>
 
   <div id="dialogue" class="panel">
@@ -73,9 +73,9 @@ const loginEl = document.getElementById("login");
 
 let ws;
 let me = null;
-let state = { players:[], enemies:[], npcs:[], quests:[], world:{width:1600,height:1000} };
-let keys = new Set();
+let state = { players:[], enemies:[], npcs:[], quests:[], projectiles:[], world:{width:1600,height:1000} };
 let camera = { x:0, y:0, zoom:1 };
+let lastClickPoint = null;
 
 function resize() {
   canvas.width = innerWidth * devicePixelRatio;
@@ -186,22 +186,6 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 }
 
-addEventListener("keydown", e => {
-  if (["INPUT","BUTTON"].includes(document.activeElement.tagName)) return;
-  keys.add(e.key.toLowerCase());
-});
-addEventListener("keyup", e => keys.delete(e.key.toLowerCase()));
-
-setInterval(() => {
-  if (!me) return;
-  let dx = 0, dy = 0;
-  if (keys.has("w") || keys.has("arrowup")) dy--;
-  if (keys.has("s") || keys.has("arrowdown")) dy++;
-  if (keys.has("a") || keys.has("arrowleft")) dx--;
-  if (keys.has("d") || keys.has("arrowright")) dx++;
-  if (dx || dy) send({ type:"move", dx, dy });
-}, 50);
-
 canvas.addEventListener("wheel", e => {
   e.preventDefault();
   camera.zoom = Math.max(.55, Math.min(1.8, camera.zoom * (e.deltaY > 0 ? .92 : 1.08)));
@@ -227,7 +211,14 @@ canvas.addEventListener("click", e => {
   const enemy = state.enemies
     .filter(x => x.alive)
     .find(x => Math.hypot(x.x-p.x,x.y-p.y) < 34);
-  if (enemy) send({ type:"attack", enemyId:enemy.id });
+
+  if (enemy) {
+    send({ type:"attack", enemyId:enemy.id });
+    return;
+  }
+
+  lastClickPoint = { x:p.x, y:p.y, time:Date.now() };
+  send({ type:"moveTo", x:p.x, y:p.y });
 });
 
 function drawWorld() {
@@ -287,6 +278,31 @@ function drawWorld() {
     if (!e.alive) continue;
     drawUnit(e.x,e.y,"#9c3131",e.name,14);
     drawHpBar(e.x,e.y-25,e.hp/e.maxHp);
+  }
+
+  for (const p of state.projectiles || []) {
+    ctx.strokeStyle = "#ffe58a";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(p.x - 10, p.y);
+    ctx.lineTo(p.x + 4, p.y);
+    ctx.stroke();
+
+    ctx.fillStyle = "#fff3b0";
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (lastClickPoint && Date.now() - lastClickPoint.time < 700) {
+    const age = (Date.now() - lastClickPoint.time) / 700;
+    ctx.globalAlpha = 1 - age;
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(lastClickPoint.x, lastClickPoint.y, 10 + age * 10, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
   }
 
   for (const p of state.players) {
