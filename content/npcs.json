@@ -1,0 +1,10 @@
+[
+  {
+    "id": "boris",
+    "name": "Boris",
+    "x": 430,
+    "y": 330,
+    "dialogue": "The old radar station has been overrun by bandits. Can you clear them out?",
+    "quest": "old_radar_station"
+  }
+]
