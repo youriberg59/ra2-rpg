@@ -1,37 +1,8 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: ra2rpg
-      POSTGRES_USER: ra2rpg
-      POSTGRES_PASSWORD: ra2rpg
-    volumes:
-      - ra2rpg_pgdata:/var/lib/postgresql/data
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ra2rpg -d ra2rpg"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-
-  game:
+  mod-builder:
     build:
       context: .
       dockerfile: Dockerfile
-    command: npm run dev
-    environment:
-      PORT: 8080
-      DATABASE_URL: postgres://ra2rpg:ra2rpg@postgres:5432/ra2rpg
-    depends_on:
-      postgres:
-        condition: service_healthy
-    ports:
-      - "8080:8080"
     volumes:
-      - ./server:/app/server
-      - /app/server/node_modules
-      - ./client:/app/client
-      - ./content:/app/content:ro
-
-volumes:
-  ra2rpg_pgdata:
+      - ./mod:/workspace/mod:ro
+      - ./dist:/workspace/dist
