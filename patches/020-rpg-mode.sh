@@ -486,4 +486,52 @@ const fs = require('fs');
   );
 }
 
+
+// Center the world camera on the actual loaded map.
+// CameraPan defaults to (0,0) and the upstream WorldView.setupViewport() is empty,
+// leaving a perfectly valid map outside the viewport.
+{
+  const file = 'src/gui/screen/game/WorldView.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  if (!src.includes("import { IsoCoords }")) {
+    src = src.replace(
+      "import { BoxedVar } from '@/util/BoxedVar';",
+      "import { BoxedVar } from '@/util/BoxedVar';\nimport { IsoCoords } from '@/engine/IsoCoords';"
+    );
+  }
+
+  const marker = "    worldScene.add(mapTileLayer as any);";
+  const cameraBlock = `
+    // Center camera using the actual average map tile position in screen space.
+    const mapTiles = this.game.map?.tiles?.getAll?.() ?? [];
+    if (mapTiles.length) {
+      let sx = 0;
+      let sy = 0;
+      let count = 0;
+
+      for (const tile of mapTiles) {
+        if (!tile) continue;
+        const p = IsoCoords.tile3dToScreen(tile.rx, tile.ry, tile.z ?? 0);
+        sx += p.x;
+        sy += p.y;
+        count++;
+      }
+
+      if (count) {
+        const center = { x: sx / count, y: sy / count };
+        worldScene.cameraPan.setPan(center);
+        worldScene.updateCamera(center, worldScene.cameraZoom.getZoom());
+        console.log('[WorldView] Camera centered on map.', center);
+      }
+    }
+`;
+
+  if (src.includes(marker) && !src.includes("[WorldView] Camera centered on map.")) {
+    src = src.replace(marker, marker + cameraBlock);
+  }
+
+  fs.writeFileSync(file, src);
+}
+
 NODE
