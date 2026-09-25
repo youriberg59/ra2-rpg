@@ -475,4 +475,15 @@ const fs = require('fs');
   fs.writeFileSync(file, src);
 }
 
+
+// Three.js compatibility: BufferGeometry.applyMatrix() was renamed to applyMatrix4().
+// Normalize the old API across the upstream rendering code.
+{
+  const { execSync } = require('child_process');
+  execSync(
+    "find src -type f \\( -name '*.ts' -o -name '*.tsx' \\) -print0 | xargs -0 sed -i 's/\\.applyMatrix(/.applyMatrix4(/g'",
+    { stdio: 'inherit' }
+  );
+}
+
 NODE
