@@ -257,4 +257,72 @@ const fs = require('fs');
   fs.writeFileSync(file, src);
 }
 
+
+// Global English fallback: never surface Chinese CSF strings in the self-hosted UI.
+// If a translated value still contains CJK characters, derive a readable label
+// from the string key instead (e.g. GUI:MCVRepacks -> MCV Repacks).
+{
+  const file = 'src/data/Strings.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  if (!src.includes('private humanizeEnglishKey')) {
+    src = src.replace(
+      "  public get(key: string, ...args: any[]): string {",
+      `  private humanizeEnglishKey(key: string): string {
+    const raw = String(key).replace(/^NOSTR:/i, '').split(':').pop() || String(key);
+    return raw
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+      .replace(/[_\\-]+/g, ' ')
+      .replace(/\\bM C V\\b/g, 'MCV')
+      .replace(/\\bA I\\b/g, 'AI')
+      .replace(/\\bU I\\b/g, 'UI')
+      .replace(/\\s+/g, ' ')
+      .trim();
+  }
+
+  private containsCjk(value: string): boolean {
+    return /[\\u3400-\\u4DBF\\u4E00-\\u9FFF\\uF900-\\uFAFF]/.test(value);
+  }
+
+  public get(key: string, ...args: any[]): string {`
+    );
+
+    src = src.replace(
+      `    if (value) {
+      if (typeof value !== 'string') {
+        console.warn(\`Invalid string value for name "\${key}"\`);
+        return key as unknown as string;
+      }
+      return args.length ? sprintf(value, ...args) : value;
+    }`,
+      `    if (value) {
+      if (typeof value !== 'string') {
+        console.warn(\`Invalid string value for name "\${key}"\`);
+        return key as unknown as string;
+      }
+
+      // The upstream fork ships a Chinese general.csf. Our English JSON does
+      // not cover every key, so reject Chinese fallback values globally.
+      if (this.containsCjk(value)) {
+        const fallback = this.humanizeEnglishKey(name);
+        console.debug('[Strings] Replacing Chinese fallback:', name, '->', fallback);
+        return fallback;
+      }
+
+      return args.length ? sprintf(value, ...args) : value;
+    }`
+    );
+
+    src = src.replace(
+      `    console.warn(\`[Strings] String with name "\${name}" not found"\`);
+    return name as unknown as string;`,
+      `    console.warn(\`[Strings] String with name "\${name}" not found"\`);
+    return this.humanizeEnglishKey(name);`
+    );
+  }
+
+  fs.writeFileSync(file, src);
+}
+
 NODE
