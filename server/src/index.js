@@ -37,6 +37,7 @@ const wss = new WebSocketServer({ server, path: "/ws" });
 const sockets = new Map();
 const onlinePlayers = new Map();
 const enemies = new Map();
+const projectiles = [];
 
 const WORLD = {
   width: 1600,
@@ -76,7 +77,10 @@ async function loadOrCreatePlayer(id, name) {
       xp: r.xp,
       credits: r.credits,
       inventory: r.inventory || [],
-      questState: r.quest_state || {}
+      questState: r.quest_state || {},
+      targetX: null,
+      targetY: null,
+      attackCooldownUntil: 0
     };
   }
 
@@ -91,7 +95,10 @@ async function loadOrCreatePlayer(id, name) {
     xp: 0,
     credits: 100,
     inventory: ["pistol"],
-    questState: {}
+    questState: {},
+    targetX: null,
+    targetY: null,
+    attackCooldownUntil: 0
   };
 
   await savePlayer(player);
@@ -153,6 +160,7 @@ function statePayload() {
     players: [...onlinePlayers.values()].map(publicPlayer),
     npcs,
     enemies: [...enemies.values()],
+    projectiles,
     quests
   };
 }
@@ -256,39 +264,32 @@ wss.on("connection", (ws) => {
       if (!playerId || !onlinePlayers.has(playerId)) return;
       const player = onlinePlayers.get(playerId);
 
-      if (msg.type === "move") {
-        const dx = clamp(Number(msg.dx) || 0, -1, 1);
-        const dy = clamp(Number(msg.dy) || 0, -1, 1);
-        const len = Math.hypot(dx, dy) || 1;
-        const speed = 7;
-        player.x = clamp(player.x + (dx / len) * speed, 20, WORLD.width - 20);
-        player.y = clamp(player.y + (dy / len) * speed, 20, WORLD.height - 20);
+      if (msg.type === "moveTo") {
+        player.targetX = clamp(Number(msg.x) || 0, 20, WORLD.width - 20);
+        player.targetY = clamp(Number(msg.y) || 0, 20, WORLD.height - 20);
       }
 
       if (msg.type === "attack") {
         const enemy = enemies.get(msg.enemyId);
-        if (!enemy || !enemy.alive || distance(player, enemy) > 165) return;
-        const damage = 18 + Math.floor(player.level * 1.5);
-        enemy.hp -= damage;
+        if (!enemy || !enemy.alive) return;
 
-        if (enemy.hp <= 0) {
-          enemy.hp = 0;
-          enemy.alive = false;
-          const t = enemyTypes.find(e => e.id === enemy.type);
-          enemy.respawnAt = Date.now() + (t?.respawnSeconds || 8) * 1000;
+        const now = Date.now();
+        if (now < (player.attackCooldownUntil || 0)) return;
+        if (distance(player, enemy) > 280) return;
 
-          const credits = Math.floor((t?.creditsMin || 0) + Math.random() * ((t?.creditsMax || 0) - (t?.creditsMin || 0) + 1));
-          player.credits += credits;
-          giveXp(player, t?.xp || 0);
-          advanceKillQuest(player, enemy.type);
+        player.attackCooldownUntil = now + 450;
+        player.targetX = null;
+        player.targetY = null;
 
-          if (Math.random() < 0.20) player.inventory.push("medkit");
-
-          send(ws, {
-            type: "toast",
-            text: `${enemy.name} defeated. +${t?.xp || 0} XP, +$${credits}`
-          });
-        }
+        projectiles.push({
+          id: randomId("proj"),
+          fromPlayerId: player.id,
+          targetEnemyId: enemy.id,
+          x: player.x,
+          y: player.y,
+          speed: 22,
+          damage: 18 + Math.floor(player.level * 1.5)
+        });
       }
 
       if (msg.type === "interactNpc") {
@@ -367,6 +368,76 @@ wss.on("connection", (ws) => {
 
 setInterval(() => {
   const now = Date.now();
+
+  for (const player of onlinePlayers.values()) {
+    if (player.targetX == null || player.targetY == null) continue;
+
+    const dx = player.targetX - player.x;
+    const dy = player.targetY - player.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist < 8) {
+      player.x = player.targetX;
+      player.y = player.targetY;
+      player.targetX = null;
+      player.targetY = null;
+    } else {
+      const speed = 9;
+      player.x = clamp(player.x + (dx / dist) * speed, 20, WORLD.width - 20);
+      player.y = clamp(player.y + (dy / dist) * speed, 20, WORLD.height - 20);
+    }
+  }
+
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    const p = projectiles[i];
+    const enemy = enemies.get(p.targetEnemyId);
+
+    if (!enemy || !enemy.alive) {
+      projectiles.splice(i, 1);
+      continue;
+    }
+
+    const dx = enemy.x - p.x;
+    const dy = enemy.y - p.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist <= p.speed + 6) {
+      enemy.hp -= p.damage;
+
+      if (enemy.hp <= 0) {
+        enemy.hp = 0;
+        enemy.alive = false;
+
+        const t = enemyTypes.find(e => e.id === enemy.type);
+        enemy.respawnAt = Date.now() + (t?.respawnSeconds || 8) * 1000;
+
+        const owner = onlinePlayers.get(p.fromPlayerId);
+        if (owner) {
+          const credits = Math.floor(
+            (t?.creditsMin || 0) +
+            Math.random() * ((t?.creditsMax || 0) - (t?.creditsMin || 0) + 1)
+          );
+
+          owner.credits += credits;
+          giveXp(owner, t?.xp || 0);
+          advanceKillQuest(owner, enemy.type);
+
+          if (Math.random() < 0.20) owner.inventory.push("medkit");
+
+          send(sockets.get(owner.id), {
+            type: "toast",
+            text: `${enemy.name} defeated. +${t?.xp || 0} XP, +${credits}`
+          });
+        }
+      }
+
+      projectiles.splice(i, 1);
+      continue;
+    }
+
+    p.x += (dx / dist) * p.speed;
+    p.y += (dy / dist) * p.speed;
+  }
 
   for (const enemy of enemies.values()) {
     if (!enemy.alive && enemy.respawnAt && now >= enemy.respawnAt) {
