@@ -1,167 +1,148 @@
-# RA2 Action RPG Prototype
+# RA2 RPG — Chrono Divide Mod
 
-A small browser-based multiplayer action-RPG vertical slice inspired by Red Alert 2.
+This project now targets **Chrono Divide + the official Chrono Divide Mod SDK** instead of maintaining a custom browser renderer.
 
-This prototype deliberately uses placeholder vector graphics instead of copyrighted Red Alert 2 assets. It is designed so an asset-import layer can be added later for users who own the original game.
+Chrono Divide is a browser reimplementation of Red Alert 2. Its public Mod SDK supports RA2-style mod files such as INI files, MIX archives, maps and a standalone `modcd.ini` manifest. The original Red Alert 2 MIX archives are supplied separately by the player and are not included in this repository.
 
-## Included
+## Project direction
 
-- Browser client
-- WebSocket multiplayer
-- PostgreSQL persistence
-- Character save/load
-- WASD / arrow movement
-- Multiplayer presence
-- NPC interaction
-- Quest acceptance and completion
-- Enemy combat
-- Enemy respawn
-- XP and leveling
-- Credits
-- Loot
-- Inventory + medkits
-- Simple enemy AI
-- Docker Compose
-- Development bind mounts + Node watch mode
-- Content-driven quests, NPCs, and enemies
+The goal is to explore an Action-RPG-like Red Alert 2 experience while keeping Chrono Divide as the rendering/gameplay engine.
 
-## First start
-
-Requirements:
-
-- Docker Desktop / Docker Engine
-- Docker Compose
-
-Clone the repository:
-
-```bash
-git clone https://github.com/youriberg59/ra2-rpg.git
-cd ra2-rpg
-```
-
-Then build once:
-
-```bash
-docker compose up --build -d
-```
-
-Open:
+The repository is organized as a Chrono Divide mod workspace:
 
 ```text
-http://localhost:8080
+ra2-rpg/
+  mod/
+    modcd.ini
+    rules.ini
+    art.ini
+    README.txt
+
+  tools/
+    package-mod.sh
+
+  dist/
+    generated mod archives
+
+  docs/
+    CHRONO-DIVIDE.md
 ```
 
-To test multiplayer, open a second browser/private window and use a different Player ID.
+## Important engine constraint
 
-## Updating from GitHub
+Chrono Divide's public Mod SDK exposes RA2-compatible modding through INI/MIX/map content. It does not expose the entire game client source as a general-purpose RPG engine.
 
-For normal updates:
+That means we can directly modify things such as:
 
-```bash
+- units
+- infantry
+- weapons
+- buildings
+- art definitions
+- maps
+- game rules
+- supported map triggers/actions
+- custom MIX content
+
+But systems such as a persistent MMO inventory, arbitrary JavaScript NPC dialogue trees, accounts or a totally new control layer are not automatically available through the Mod SDK. Those features will need to be approximated with supported RA2/Chrono Divide mechanics or implemented as a separate companion layer where possible.
+
+## Prerequisites
+
+You need:
+
+- an original Red Alert 2 installation / original MIX archives
+- access to Chrono Divide in your browser
+- Docker Desktop only if you want to use the packaging helper in this repository
+
+No copyrighted Red Alert 2 assets are stored in this repository.
+
+## Development workflow
+
+1. Open Chrono Divide.
+2. Go to **Options → Storage**.
+3. Open the `mods` directory.
+4. Create a folder named:
+
+```text
+ra2-rpg
+```
+
+5. Copy the files from this repository's `mod/` directory into that folder.
+6. Reload Chrono Divide.
+7. Open **Mods**.
+8. Load **RA2 RPG**.
+9. After every mod-file change, refresh/reload the Chrono Divide client.
+
+## Package the mod with Docker
+
+Build the helper image once:
+
+```powershell
+docker compose build
+```
+
+Create a distributable ZIP:
+
+```powershell
+docker compose run --rm mod-builder
+```
+
+The generated archive will appear in:
+
+```text
+dist/ra2-rpg.zip
+```
+
+The archive is intentionally flat, as expected by Chrono Divide's mod import workflow.
+
+## Updating the project
+
+```powershell
+cd C:\ra2-rpg
 git pull
 ```
 
-The project uses bind mounts:
+You normally do **not** need to rebuild a game server anymore because Chrono Divide itself is the game client.
 
-- `./server` -> live server source
-- `./client` -> live browser files
-- `./content` -> live content files
+## Main mod files
 
-Server JavaScript changes are watched by Node and automatically restart the game process.
+### mod/modcd.ini
 
-Client HTML/JavaScript/CSS changes are visible after refreshing the browser.
+Chrono Divide mod manifest. It defines the mod ID, name, description, version and author.
 
-Content JSON is mounted directly too, but the current prototype loads it when the server starts. After quest/NPC/enemy content changes:
+### mod/rules.ini
 
-```bash
-docker compose restart game
-```
+Gameplay definitions and overrides.
 
-You only need to rebuild after changes to:
+### mod/art.ini
 
-- `Dockerfile`
-- `server/package.json`
+Visual definitions and overrides.
 
-Then use:
-
-```bash
-docker compose up -d --build
-```
-
-## Controls
-
-- `WASD` / arrow keys: move
-- Click an enemy: attack
-- Click Boris: talk
-- Mouse wheel: zoom
-- Use medkits from the inventory panel
-
-## First quest
-
-1. Spawn in town.
-2. Click Boris.
-3. Accept **The Old Radar Station**.
-4. Move east to the radar station.
-5. Kill 5 bandits.
-6. Return to Boris.
-7. Receive credits, XP, and a medkit.
-8. Reload later with the same Player ID — progress is saved.
-
-## Content editing
-
-Edit:
-
-- `content/quests.json`
-- `content/npcs.json`
-- `content/enemies.json`
-
-## Reset all saved characters
-
-```bash
-docker compose down -v
-docker compose up --build -d
-```
-
-The `-v` option deletes the PostgreSQL volume, so do not use it during normal updates.
-
-## Architecture
+Additional files can later include:
 
 ```text
-Browser
-  |
-  | WebSocket
-  v
-Node.js authoritative game server
-  |
-  +-- world state
-  +-- enemy AI
-  +-- quest logic
-  +-- combat
-  |
-  v
-PostgreSQL
-  |
-  +-- character position
-  +-- level / XP
-  +-- inventory
-  +-- quest progress
+*.map
+*.mpr
+*.pkt
+expand##.mix
+ecache##.mix
+elocal##.mix
+ra2.csf
 ```
 
-## Important prototype limitations
+## Next milestones
 
-This is intentionally the first vertical slice, not the final engine.
+The sensible order for this project is now:
 
-Not yet included:
+1. Create a dedicated RPG-style infantry hero.
+2. Restrict gameplay toward controlling a small number of units / one hero where possible.
+3. Create RPG-like weapons and progression proxies using supported rules.
+4. Build a dedicated large isometric map.
+5. Add civilians/NPC-like actors and supported map triggers.
+6. Add custom SHP/VXL/building/loot-style graphics in MIX archives.
+7. Evaluate which requested RPG systems require an external companion service rather than Chrono Divide modding alone.
 
-- Red Alert 2 asset importer
-- SHP/VXL/HVA renderer
-- RA2 map parser
-- proper collision/pathfinding
-- click-to-move
-- ranged projectiles
-- equipment slots
-- party system
-- instanced dungeons
-- account/password authentication
-- admin content editor
-- world editor
+## Official references
+
+- Chrono Divide Mod SDK: https://github.com/chronodivide/mod-sdk
+- Chrono Divide: https://chronodivide.com
