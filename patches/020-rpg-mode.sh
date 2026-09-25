@@ -158,4 +158,57 @@ const fs = require('fs');
   if (src.includes(oldLine)) src = src.replace(oldLine, newLines);
   fs.writeFileSync(file, src);
 }
+
+// Improve fatal game-init diagnostics and avoid misleading replay-save errors.
+{
+  const file = 'src/gui/screen/game/GameScreen.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  src = src.replace(
+    `    let errorMessage = this.strings.get('TS:GameInitError');
+
+    const message = typeof error === 'string' ? error : error.message;
+    if (message?.match(/memory|allocation/i)) {
+      errorMessage = this.strings.get('TS:GameInitOom');
+    } else if (!gameOpts.mapOfficial) {
+      errorMessage += '\\n\\n' + this.strings.get('TS:CustomMapCrash');
+    }
+
+    this.handleError(error, errorMessage);`,
+    `    let errorMessage = this.strings.get('TS:GameInitError');
+
+    const message = typeof error === 'string' ? error : (error?.message || String(error));
+    console.error('[GameInit] Fatal initialization error:', error);
+
+    if (message?.match(/memory|allocation/i)) {
+      errorMessage = this.strings.get('TS:GameInitOom');
+    } else if (!gameOpts.mapOfficial) {
+      errorMessage += '\\n\\n' + this.strings.get('TS:CustomMapCrash');
+    }
+
+    errorMessage += '\\n\\nTechnical details:\\n' + message;
+    this.handleError(error, errorMessage);`
+  );
+
+  // If onGameStart itself throws, show the actual runtime error too.
+  src = src.replace(
+    `          const errorMessage = error.message?.match(/memory|allocation/i)
+            ? this.strings.get('TS:GameInitOom')
+            : this.strings.get('TS:GameInitError') +
+              (game.gameOpts.mapOfficial ? '' : '\\n\\n' + this.strings.get('TS:CustomMapCrash'));
+          this.handleGameError(error, errorMessage, game);`,
+    `          const runtimeMessage = error instanceof Error ? error.message : String(error);
+          console.error('[GameStart] Fatal startup error:', error);
+          const errorMessage = (runtimeMessage?.match(/memory|allocation/i)
+            ? this.strings.get('TS:GameInitOom')
+            : this.strings.get('TS:GameInitError') +
+              (game.gameOpts.mapOfficial ? '' : '\\n\\n' + this.strings.get('TS:CustomMapCrash')))
+            + '\\n\\nTechnical details:\\n' + runtimeMessage;
+          // Do not attempt to save a replay for a game that never initialized.
+          this.handleError(error, errorMessage);`
+  );
+
+  fs.writeFileSync(file, src);
+}
+
 NODE
