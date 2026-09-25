@@ -9,12 +9,12 @@ services:
       - ra2web_source:/app
       - ./docker:/workspace/docker:ro
       - ./patches:/workspace/patches:ro
-      - ./original-game:/app/public/original-game:ro
+      - ./original-game:/original-game:ro
     environment:
       RA2WEB_REPO: https://github.com/DD-Channel/ra2-web.git
       RA2WEB_COMMIT: 786800b50fe19f7dbe1fa6243e364fd761c64198
       RA2_ORIGINAL_WEB_PATH: /original-game
-    restart: unless-stopped
+    restart: "no"
 
 volumes:
   ra2web_source:
