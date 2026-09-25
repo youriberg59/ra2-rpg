@@ -1,11 +1,23 @@
-FROM alpine:3.20
+FROM node:20-bookworm
 
-RUN apk add --no-cache zip
+ARG RA2WEB_REPO=https://github.com/DD-Channel/ra2-web.git
+ARG RA2WEB_COMMIT=786800b50fe19f7dbe1fa6243e364fd761c64198
 
-WORKDIR /workspace
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 
-COPY tools/package-mod.sh /usr/local/bin/package-mod
-RUN sed -i 's/\r$//' /usr/local/bin/package-mod \
-    && chmod +x /usr/local/bin/package-mod
+WORKDIR /app
 
-ENTRYPOINT ["/bin/sh", "/usr/local/bin/package-mod"]
+RUN git clone "$RA2WEB_REPO" . \
+ && git checkout "$RA2WEB_COMMIT"
+
+RUN npm ci
+
+COPY docker/start-ra2web.sh /usr/local/bin/start-ra2web
+RUN sed -i 's/\r$//' /usr/local/bin/start-ra2web \
+ && chmod +x /usr/local/bin/start-ra2web
+
+EXPOSE 3000
+
+ENTRYPOINT ["/bin/sh", "/usr/local/bin/start-ra2web"]
