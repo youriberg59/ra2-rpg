@@ -1213,4 +1213,124 @@ const fs = require('fs');
   fs.writeFileSync(file, src);
 }
 
+
+// Preserve exact click position inside the destination tile for RPG movement.
+{
+  // Extend MoveOrder with an optional target offset and forward it to MoveTask.
+  const file = 'src/game/order/MoveOrder.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  if (!src.includes("import { Vector2 }")) {
+    src = src.replace(
+      "import { MoveTargetTask } from "@/game/gameobject/task/move/MoveTargetTask";",
+      "import { MoveTargetTask } from "@/game/gameobject/task/move/MoveTargetTask";\nimport { Vector2 } from "@/game/math/Vector2";"
+    );
+  }
+
+  src = src.replace(
+    "    public feedbackType: OrderFeedbackType;",
+    "    public feedbackType: OrderFeedbackType;\n    private targetOffset?: Vector2;"
+  );
+
+  if (!src.includes("setTargetOffset(offset: Vector2)")) {
+    src = src.replace(
+      "    getPointerType(isMini: boolean): PointerType {",
+      "    setTargetOffset(offset: Vector2): void {\n        this.targetOffset = offset;\n    }\n\n    getPointerType(isMini: boolean): PointerType {"
+    );
+  }
+
+  src = src.replace(
+    "{ closeEnoughTiles, forceMove: this.forceMove }",
+    "{ closeEnoughTiles, forceMove: this.forceMove, targetOffset: this.targetOffset }"
+  );
+
+  src = src.replace(
+    "                existingMoveTask.updateTarget(this.target.tile, !!this.target.getBridge());",
+    "                existingMoveTask.updateTarget(this.target.tile, !!this.target.getBridge(), this.targetOffset);"
+  );
+
+  fs.writeFileSync(file, src);
+}
+
+// Allow an in-progress MoveTask to receive a new exact intra-tile offset.
+{
+  const file = 'src/game/gameobject/task/move/MoveTask.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  src = src.replace(
+`  updateTarget(tile: Tile, toBridge: boolean): void {
+    this.targetTile = tile;
+    this.toBridge = toBridge;
+    this.needsPathUpdate = true;
+    this.targetChangeRequested = true;
+  }`,
+`  updateTarget(tile: Tile, toBridge: boolean, targetOffset?: Vector2): void {
+    this.targetTile = tile;
+    this.toBridge = toBridge;
+    if (targetOffset) {
+      this.options ??= {};
+      this.options.targetOffset = targetOffset;
+      this.targetOffset = targetOffset;
+    }
+    this.needsPathUpdate = true;
+    this.targetChangeRequested = true;
+  }`
+  );
+
+  fs.writeFileSync(file, src);
+}
+
+// Compute the exact click offset inside the selected tile in RPG interaction.
+{
+  const file = 'src/gui/screen/game/worldInteraction/RpgInteraction.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  if (!src.includes("import { IsoCoords }")) {
+    src = src.replace(
+      "import { AttackOrder } from '@/game/order/AttackOrder';",
+      "import { AttackOrder } from '@/game/order/AttackOrder';\nimport { IsoCoords } from '@/engine/IsoCoords';\nimport { Coords } from '@/game/Coords';\nimport { Vector2 } from '@/game/math/Vector2';"
+    );
+  }
+
+  const anchor = "      const target = this.game.createTarget(undefined, tile);";
+  const replacement = `      const viewport = this.worldScene.viewport;
+      const pan = this.worldScene.cameraPan.getPan();
+      const zoom = this.worldScene.cameraZoom?.getZoom?.() ?? 1;
+      const origin = IsoCoords.worldToScreen(0, 0);
+
+      const localX = pointer.x - viewport.x - viewport.width / 2;
+      const localY = pointer.y - viewport.y - viewport.height / 2;
+      const worldScreenX = origin.x + pan.x + localX / zoom;
+      const worldScreenY = origin.y + pan.y + localY / zoom;
+      const worldPos = IsoCoords.screenToWorld(worldScreenX, worldScreenY);
+
+      const clamp = (value: number) =>
+        Math.max(0, Math.min(Coords.LEPTONS_PER_TILE - 1, value));
+
+      const exactOffset = new Vector2(
+        clamp(worldPos.x - tile.rx * Coords.LEPTONS_PER_TILE),
+        clamp(worldPos.y - tile.ry * Coords.LEPTONS_PER_TILE)
+      );
+
+      const target = this.game.createTarget(undefined, tile);`;
+
+  if (!src.includes(anchor)) {
+    console.error('Expected RPG move target creation not found.');
+    process.exit(1);
+  }
+  src = src.replace(anchor, replacement);
+
+  src = src.replace(
+    "      const order = new MoveOrder(this.game, this.game.map, this.game.unitSelection, false);\n      order.set(this.hero, target);",
+    "      const order = new MoveOrder(this.game, this.game.map, this.game.unitSelection, false);\n      order.set(this.hero, target);\n      order.setTargetOffset(exactOffset);"
+  );
+
+  src = src.replace(
+    "        console.log('[RPG] Move:', tile.rx, tile.ry);",
+    "        console.log('[RPG] Move:', tile.rx, tile.ry, 'offset', { x: exactOffset.x, y: exactOffset.y });"
+  );
+
+  fs.writeFileSync(file, src);
+}
+
 NODE
