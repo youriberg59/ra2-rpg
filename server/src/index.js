@@ -30,6 +30,7 @@ function loadJson(name) {
 const quests = loadJson("quests.json");
 const npcs = loadJson("npcs.json");
 const enemyTypes = loadJson("enemies.json");
+const worldMap = loadJson("maps/world.json");
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: "/ws" });
@@ -40,10 +41,11 @@ const enemies = new Map();
 const projectiles = [];
 
 const WORLD = {
-  width: 1600,
-  height: 1000,
-  town: { x: 220, y: 160, w: 620, h: 500 },
-  radar: { x: 1080, y: 250, w: 330, h: 360 }
+  width: worldMap.width,
+  height: worldMap.height,
+  tileWidth: worldMap.tileWidth,
+  tileHeight: worldMap.tileHeight,
+  worldUnit: worldMap.worldUnit
 };
 
 function randomId(prefix = "id") {
@@ -148,10 +150,9 @@ function spawnEnemy(typeId, x, y) {
   });
 }
 
-[
-  [1140, 320], [1240, 350], [1320, 450], [1180, 500], [1360, 560],
-  [1040, 420], [1270, 260]
-].forEach(([x, y]) => spawnEnemy("bandit", x, y));
+for (const spawn of worldMap.enemySpawns || []) {
+  spawnEnemy(spawn.type, spawn.x, spawn.y);
+}
 
 function statePayload() {
   return {
@@ -161,7 +162,8 @@ function statePayload() {
     npcs,
     enemies: [...enemies.values()],
     projectiles,
-    quests
+    quests,
+    map: worldMap
   };
 }
 
@@ -256,7 +258,7 @@ wss.on("connection", (ws) => {
         const player = await loadOrCreatePlayer(playerId, msg.name);
         onlinePlayers.set(playerId, player);
         sockets.set(playerId, ws);
-        send(ws, { type: "welcome", player: publicPlayer(player), quests, npcs, world: WORLD });
+        send(ws, { type: "welcome", player: publicPlayer(player), quests, npcs, world: WORLD, map: worldMap });
         broadcast(statePayload());
         return;
       }
