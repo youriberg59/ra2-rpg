@@ -1,0 +1,22 @@
+[
+  {
+    "id": "old_radar_station",
+    "title": "The Old Radar Station",
+    "description": "Boris wants you to clear the bandits around the old radar station.",
+    "giver": "boris",
+    "objectives": [
+      {
+        "type": "kill",
+        "target": "bandit",
+        "count": 5
+      }
+    ],
+    "rewards": {
+      "xp": 120,
+      "credits": 250,
+      "items": [
+        "medkit"
+      ]
+    }
+  }
+]
