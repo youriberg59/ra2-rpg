@@ -58,10 +58,32 @@ rm -rf /app/public/original-game
 ln -s /original-game /app/public/original-game
 
 # Build one server-side archive that new browsers can import automatically.
-# This avoids asking users to manually pick a local RA2 folder on every device.
-echo "Preparing centralized RA2 resource archive..."
+# Cache it in a persistent Docker volume so normal restarts are fast.
+mkdir -p /resource-cache
+
+SOURCE_SIG="$(
+  find /original-game -maxdepth 1 -type f -printf '%f:%s:%T@\n' \
+    | sort \
+    | sha256sum \
+    | awk '{print $1}'
+)"
+CACHED_SIG=""
+[ -f /resource-cache/original-game-pack.sig ] && CACHED_SIG="$(cat /resource-cache/original-game-pack.sig)"
+
+if [ ! -f /resource-cache/original-game-pack.tar ] || [ "$SOURCE_SIG" != "$CACHED_SIG" ]; then
+  echo "Building centralized RA2 resource archive (only required when original-game changes)..."
+  TMP_ARCHIVE="/resource-cache/original-game-pack.tar.tmp"
+  rm -f "$TMP_ARCHIVE"
+  tar -cf "$TMP_ARCHIVE" -C /original-game .
+  mv "$TMP_ARCHIVE" /resource-cache/original-game-pack.tar
+  printf '%s' "$SOURCE_SIG" > /resource-cache/original-game-pack.sig
+  echo "Centralized RA2 archive ready."
+else
+  echo "Using cached centralized RA2 resource archive."
+fi
+
 rm -f /app/public/original-game-pack.tar
-tar -cf /app/public/original-game-pack.tar -C /original-game .
+ln -s /resource-cache/original-game-pack.tar /app/public/original-game-pack.tar
 
 # Apply local patch scripts in lexical order.
 if [ -d /workspace/patches ]; then
