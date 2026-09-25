@@ -131,3 +131,28 @@ docker compose exec ra2-web bash -lc "ls -lah /app/public/original-game | head -
 The upstream project states that it is GPL-3.0. Derivative distributed code must remain compatible with that license and make source code available.
 
 Original Red Alert 2 data files remain EA's intellectual property and are not included in this repository.
+
+
+## Centralized resources and LAN access
+
+The app is now exposed on TCP port 8080 on all host interfaces.
+
+Local access:
+
+```text
+http://127.0.0.1:8080
+```
+
+LAN access:
+
+```text
+http://YOUR-PC-LAN-IP:8080
+```
+
+The startup script creates `/original-game-pack.tar` from the host `original-game/` directory. New browsers automatically import that server-hosted archive into their own browser storage; users do not need to manually select a Red Alert 2 folder.
+
+The UI default language is patched to `en-US`.
+
+Each new browser/device still downloads and stores the required resources once, because browser storage is isolated per device/profile. Existing browsers reuse their local copy on subsequent visits.
+
+Because the RA2 resource archive is available to clients that can reach port 8080, only expose this service on a trusted private network. Do not port-forward 8080 to the public Internet.
