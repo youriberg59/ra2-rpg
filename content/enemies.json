@@ -1,0 +1,12 @@
+[
+  {
+    "id": "bandit",
+    "name": "Bandit",
+    "maxHp": 40,
+    "damage": 8,
+    "xp": 20,
+    "creditsMin": 5,
+    "creditsMax": 20,
+    "respawnSeconds": 8
+  }
+]
