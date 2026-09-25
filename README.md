@@ -1,148 +1,142 @@
-# RA2 RPG — Chrono Divide Mod
+# RA2 RPG — self-hosted RA2 Web workspace
 
-This project now targets **Chrono Divide + the official Chrono Divide Mod SDK** instead of maintaining a custom browser renderer.
+This repository now runs a **self-hosted browser RA2 engine in Docker** using the GPL-3.0 project [DD-Channel/ra2-web](https://github.com/DD-Channel/ra2-web) as the upstream codebase.
 
-Chrono Divide is a browser reimplementation of Red Alert 2. Its public Mod SDK supports RA2-style mod files such as INI files, MIX archives, maps and a standalone `modcd.ini` manifest. The original Red Alert 2 MIX archives are supplied separately by the player and are not included in this repository.
+The long-term goal is to modify that engine into an isometric action-RPG experience while reusing Red Alert 2 file formats, rendering and game logic.
 
-## Project direction
+## Important status
 
-The goal is to explore an Action-RPG-like Red Alert 2 experience while keeping Chrono Divide as the rendering/gameplay engine.
+The upstream RA2 Web project is still under development. It already contains parsers/rendering support for MIX, SHP, VXL, TMP, INI and other Red Alert 2 formats, but not every original-game feature is complete.
 
-The repository is organized as a Chrono Divide mod workspace:
+This repository currently provides the **self-hosted Docker foundation**. RPG engine changes will be added as patches/overrides on top of the pinned upstream source.
 
-```text
-ra2-rpg/
-  mod/
-    modcd.ini
-    rules.ini
-    art.ini
-    README.txt
+## Original Red Alert 2 files
 
-  tools/
-    package-mod.sh
-
-  dist/
-    generated mod archives
-
-  docs/
-    CHRONO-DIVIDE.md
-```
-
-## Important engine constraint
-
-Chrono Divide's public Mod SDK exposes RA2-compatible modding through INI/MIX/map content. It does not expose the entire game client source as a general-purpose RPG engine.
-
-That means we can directly modify things such as:
-
-- units
-- infantry
-- weapons
-- buildings
-- art definitions
-- maps
-- game rules
-- supported map triggers/actions
-- custom MIX content
-
-But systems such as a persistent MMO inventory, arbitrary JavaScript NPC dialogue trees, accounts or a totally new control layer are not automatically available through the Mod SDK. Those features will need to be approximated with supported RA2/Chrono Divide mechanics or implemented as a separate companion layer where possible.
-
-## Prerequisites
-
-You need:
-
-- an original Red Alert 2 installation / original MIX archives
-- access to Chrono Divide in your browser
-- Docker Desktop only if you want to use the packaging helper in this repository
-
-No copyrighted Red Alert 2 assets are stored in this repository.
-
-## Development workflow
-
-1. Open Chrono Divide.
-2. Go to **Options → Storage**.
-3. Open the `mods` directory.
-4. Create a folder named:
+Put your legally owned original game files in:
 
 ```text
-ra2-rpg
+C:\ra2-rpg\original-game\
 ```
 
-5. Copy the files from this repository's `mod/` directory into that folder.
-6. Reload Chrono Divide.
-7. Open **Mods**.
-8. Load **RA2 RPG**.
-9. After every mod-file change, refresh/reload the Chrono Divide client.
-
-## Package the mod with Docker
-
-Build the helper image once:
-
-```powershell
-docker compose build
-```
-
-Create a distributable ZIP:
-
-```powershell
-docker compose run --rm mod-builder
-```
-
-The generated archive will appear in:
+For example:
 
 ```text
-dist/ra2-rpg.zip
+original-game/
+  ra2.mix
+  language.mix
+  multi.mix
+  cache.mix
+  local.mix
+  conquer.mix
+  neutral.mix
+  generic.mix
+  ...
 ```
 
-The archive is intentionally flat, as expected by Chrono Divide's mod import workflow.
+The directory is excluded from Git.
 
-## Updating the project
+At runtime Docker mounts it read-only at:
+
+```text
+/app/public/original-game
+```
+
+so the files are available only through the local web application.
+
+The Docker port is deliberately bound to:
+
+```text
+127.0.0.1:8080
+```
+
+rather than all network interfaces, to avoid exposing your original game archives to the LAN.
+
+## Start the self-hosted client
+
+From PowerShell:
 
 ```powershell
 cd C:\ra2-rpg
 git pull
+docker compose down
+docker compose up --build -d
 ```
 
-You normally do **not** need to rebuild a game server anymore because Chrono Divide itself is the game client.
-
-## Main mod files
-
-### mod/modcd.ini
-
-Chrono Divide mod manifest. It defines the mod ID, name, description, version and author.
-
-### mod/rules.ini
-
-Gameplay definitions and overrides.
-
-### mod/art.ini
-
-Visual definitions and overrides.
-
-Additional files can later include:
+Then open:
 
 ```text
-*.map
-*.mpr
-*.pkt
-expand##.mix
-ecache##.mix
-elocal##.mix
-ra2.csf
+http://localhost:8080
 ```
 
-## Next milestones
+To follow logs:
 
-The sensible order for this project is now:
+```powershell
+docker compose logs -f ra2-web
+```
 
-1. Create a dedicated RPG-style infantry hero.
-2. Restrict gameplay toward controlling a small number of units / one hero where possible.
-3. Create RPG-like weapons and progression proxies using supported rules.
-4. Build a dedicated large isometric map.
-5. Add civilians/NPC-like actors and supported map triggers.
-6. Add custom SHP/VXL/building/loot-style graphics in MIX archives.
-7. Evaluate which requested RPG systems require an external companion service rather than Chrono Divide modding alone.
+To stop it:
 
-## Official references
+```powershell
+docker compose down
+```
 
-- Chrono Divide Mod SDK: https://github.com/chronodivide/mod-sdk
-- Chrono Divide: https://chronodivide.com
+## Architecture
+
+```text
+Browser
+   |
+   v
+localhost:8080
+   |
+   v
+Docker / Vite
+   |
+   +-- DD-Channel/ra2-web source
+   |
+   +-- /original-game  <-- your local RA2 files, read-only
+   |
+   +-- future RPG patches
+```
+
+## Upstream version
+
+The Docker image currently pins RA2 Web commit:
+
+```text
+786800b50fe19f7dbe1fa6243e364fd761c64198
+```
+
+Pinning the commit makes our modifications reproducible instead of silently changing every time the upstream repository changes.
+
+## RPG modification strategy
+
+Our changes will live under:
+
+```text
+patches/
+```
+
+and later be applied during the Docker build/start process.
+
+Planned engine changes:
+
+- click-to-move single-character controls
+- hero-centric gameplay instead of RTS unit selection
+- visible projectiles and weapon effects
+- NPC interaction/dialogues
+- inventory and loot
+- quests
+- persistent character state
+- large isometric RPG maps
+- custom characters/buildings/items
+- multiplayer RPG synchronization
+
+## Licensing
+
+The upstream RA2 Web project states that it is GPL-3.0. Any distributed derivative code based on it must therefore remain compatible with GPL-3.0 and provide source code.
+
+Red Alert 2 itself and its original data files remain EA's intellectual property and are **not included in this repository**.
+
+## Previous Chrono Divide Mod SDK files
+
+The old `mod/` directory is retained for reference while the project transitions to the self-hosted engine. The active Docker service is now `ra2-web`, not the previous `mod-builder`.
