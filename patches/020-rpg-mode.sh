@@ -1351,4 +1351,88 @@ const fs = require('fs');
   fs.writeFileSync(file, src);
 }
 
+
+// Use the actual Three.js camera ray to compute exact RPG click coordinates.
+// This avoids projection drift from reconstructing isometric coordinates manually.
+{
+  const file = 'src/gui/screen/game/worldInteraction/RpgInteraction.ts';
+  let src = fs.readFileSync(file, 'utf8');
+
+  if (!src.includes("import * as THREE from 'three';")) {
+    src = src.replace(
+      "import { Vector2 } from '@/game/math/Vector2';",
+      "import { Vector2 } from '@/game/math/Vector2';\nimport * as THREE from 'three';"
+    );
+  }
+
+  const oldBlock = `      const viewport = this.worldScene.viewport;
+      const pan = this.worldScene.cameraPan.getPan();
+      const zoom = this.worldScene.cameraZoom?.getZoom?.() ?? 1;
+      const origin = IsoCoords.worldToScreen(0, 0);
+
+      const localX = pointer.x - viewport.x - viewport.width / 2;
+      const localY = pointer.y - viewport.y - viewport.height / 2;
+      const worldScreenX = origin.x + pan.x + localX / zoom;
+      const worldScreenY = origin.y + pan.y + localY / zoom;
+      // The rendered tile is shifted upward by its elevation. Undo that shift
+      // before converting back to ground-plane world coordinates.
+      const elevationScreenOffset = IsoCoords.tileHeightToScreen(tile.z ?? 0);
+      const worldPos = IsoCoords.screenToWorld(
+        worldScreenX,
+        worldScreenY + elevationScreenOffset
+      );
+
+      const clamp = (value: number) =>
+        Math.max(0, Math.min(Coords.LEPTONS_PER_TILE - 1, value));
+
+      const exactOffset = new Vector2(
+        clamp(worldPos.x - tile.rx * Coords.LEPTONS_PER_TILE),
+        clamp(worldPos.y - tile.ry * Coords.LEPTONS_PER_TILE)
+      );`;
+
+  const newBlock = `      const viewport = this.worldScene.viewport;
+
+      const ndc = new THREE.Vector2(
+        ((pointer.x - viewport.x) / viewport.width) * 2 - 1,
+        -((pointer.y - viewport.y) / viewport.height) * 2 + 1
+      );
+
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(ndc, this.worldScene.camera);
+
+      const groundY = Coords.tileHeightToWorld(tile.z ?? 0);
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -groundY);
+      const hit = new THREE.Vector3();
+
+      const clamp = (value: number) =>
+        Math.max(0, Math.min(Coords.LEPTONS_PER_TILE - 1, value));
+
+      let exactOffset: Vector2;
+
+      if (raycaster.ray.intersectPlane(plane, hit)) {
+        exactOffset = new Vector2(
+          clamp(hit.x - tile.rx * Coords.LEPTONS_PER_TILE),
+          clamp(hit.z - tile.ry * Coords.LEPTONS_PER_TILE)
+        );
+
+        console.log('[RPG] Exact camera-ray hit', {
+          ndc: { x: ndc.x, y: ndc.y },
+          hit: { x: hit.x, y: hit.y, z: hit.z },
+          tile: { rx: tile.rx, ry: tile.ry, z: tile.z },
+          offset: { x: exactOffset.x, y: exactOffset.y }
+        });
+      } else {
+        exactOffset = this.hero.position.getTileOffset();
+        console.warn('[RPG] Camera ray did not intersect destination plane; using current offset.');
+      }`;
+
+  if (!src.includes(oldBlock)) {
+    console.error('Expected analytical RPG exact-offset block not found.');
+    process.exit(1);
+  }
+
+  src = src.replace(oldBlock, newBlock);
+  fs.writeFileSync(file, src);
+}
+
 NODE
