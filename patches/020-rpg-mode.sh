@@ -1229,7 +1229,8 @@ const fs = require('fs');
 
   src = src.replace(
     "    public feedbackType: OrderFeedbackType;",
-    "    public feedbackType: OrderFeedbackType;\n    private targetOffset?: Vector2;"
+    "    public feedbackType: OrderFeedbackType;\n    private targetOffset?: Vector2;
+    private exactTarget: boolean = false;"
   );
 
   if (!src.includes("setTargetOffset(offset: Vector2)")) {
@@ -1241,7 +1242,12 @@ const fs = require('fs');
 
   src = src.replace(
     "{ closeEnoughTiles, forceMove: this.forceMove }",
-    "{ closeEnoughTiles, forceMove: this.forceMove, targetOffset: this.targetOffset }"
+    "{
+                        closeEnoughTiles: this.exactTarget ? 0 : closeEnoughTiles,
+                        strictCloseEnough: this.exactTarget,
+                        forceMove: this.forceMove,
+                        targetOffset: this.targetOffset
+                    }"
   );
 
   src = src.replace(
@@ -1302,7 +1308,13 @@ const fs = require('fs');
       const localY = pointer.y - viewport.y - viewport.height / 2;
       const worldScreenX = origin.x + pan.x + localX / zoom;
       const worldScreenY = origin.y + pan.y + localY / zoom;
-      const worldPos = IsoCoords.screenToWorld(worldScreenX, worldScreenY);
+      // The rendered tile is shifted upward by its elevation. Undo that shift
+      // before converting back to ground-plane world coordinates.
+      const elevationScreenOffset = IsoCoords.tileHeightToScreen(tile.z ?? 0);
+      const worldPos = IsoCoords.screenToWorld(
+        worldScreenX,
+        worldScreenY + elevationScreenOffset
+      );
 
       const clamp = (value: number) =>
         Math.max(0, Math.min(Coords.LEPTONS_PER_TILE - 1, value));
@@ -1322,7 +1334,7 @@ const fs = require('fs');
 
   src = src.replace(
     "      const order = new MoveOrder(this.game, this.game.map, this.game.unitSelection, false);\n      order.set(this.hero, target);",
-    "      const order = new MoveOrder(this.game, this.game.map, this.game.unitSelection, false);\n      order.set(this.hero, target);\n      order.setTargetOffset(exactOffset);"
+    "      const order = new MoveOrder(this.game, this.game.map, this.game.unitSelection, false);\n      order.set(this.hero, target);\n      order.setTargetOffset(exactOffset, true);"
   );
 
   src = src.replace(
