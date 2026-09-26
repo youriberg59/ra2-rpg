@@ -1229,25 +1229,31 @@ const fs = require('fs');
 
   src = src.replace(
     "    public feedbackType: OrderFeedbackType;",
-    "    public feedbackType: OrderFeedbackType;\n    private targetOffset?: Vector2;
-    private exactTarget: boolean = false;"
+`    public feedbackType: OrderFeedbackType;
+    private targetOffset?: Vector2;
+    private exactTarget: boolean = false;`
   );
 
-  if (!src.includes("setTargetOffset(offset: Vector2)")) {
+  if (!src.includes("setTargetOffset(offset: Vector2, exact: boolean = false)")) {
     src = src.replace(
       "    getPointerType(isMini: boolean): PointerType {",
-      "    setTargetOffset(offset: Vector2): void {\n        this.targetOffset = offset;\n    }\n\n    getPointerType(isMini: boolean): PointerType {"
+`    setTargetOffset(offset: Vector2, exact: boolean = false): void {
+        this.targetOffset = offset;
+        this.exactTarget = exact;
+    }
+
+    getPointerType(isMini: boolean): PointerType {`
     );
   }
 
   src = src.replace(
     "{ closeEnoughTiles, forceMove: this.forceMove }",
-    "{
+`{
                         closeEnoughTiles: this.exactTarget ? 0 : closeEnoughTiles,
                         strictCloseEnough: this.exactTarget,
                         forceMove: this.forceMove,
                         targetOffset: this.targetOffset
-                    }"
+                    }`
   );
 
   src = src.replace(
